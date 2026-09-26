@@ -13,7 +13,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
  latest.current=state;select.current=onSelect;
  useEffect(()=>{
   const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=0,lastTheme='',lastZoom=0,lastFocus=0;
-  let flight:{from:T.Vector3;to:T.Vector3;fromTarget:T.Vector3;toTarget:T.Vector3;t:number}|null=null;
+  let flight:{from:T.Vector3;to:T.Vector3;fromTarget:T.Vector3;toTarget:T.Vector3;t:number;duration:number}|null=null;
   let lastState:SceneState|null=null;
   const abort=new AbortController();
   let renderer:T.WebGLRenderer;
@@ -61,7 +61,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
   const mats=new Map(SYSTEMS.map(s=>[s.id,materialFor(s.id)]));
   const THEMES={light:{clear:'#f2f3f3',ground:0xd5d9dc,platform:0xeeeeec,ring:0x8c969f,marker:0x64748b,hemi:1.05},dark:{clear:'#0f1419',ground:0x07090c,platform:0x121820,ring:0x4d5966,marker:0x9fb0c0,hemi:.8}};
   const applyTheme=(theme:'light'|'dark')=>{const t=THEMES[theme];renderer.setClearColor(t.clear);(ground.material as T.MeshStandardMaterial).color.setHex(t.ground);(platform.material as T.MeshStandardMaterial).color.setHex(t.platform);(ring.material as T.MeshBasicMaterial).color.setHex(t.ring);(innerRing.material as T.MeshBasicMaterial).color.setHex(t.ring);markerMaterial.color.setHex(t.marker);hemi.intensity=t.hemi;dirty=true;};
-  const flyTo=(position:T.Vector3,target:T.Vector3)=>{flight={from:camera.position.clone(),to:position,fromTarget:controls.target.clone(),toTarget:target,t:0};};
+  const flyTo=(position:T.Vector3,target:T.Vector3,duration=.55)=>{flight={from:camera.position.clone(),to:position,fromTarget:controls.target.clone(),toTarget:target,t:0,duration};};
   let loaded=0;
   const loadChunk=async(ci:number)=>{
    const chunk=atlas.chunks[ci],compressed=!!chunk.gzip&&typeof DecompressionStream!=='undefined';const response=await fetch((compressed?chunk.gzip!:chunk.url).replace(/^\//,''),{signal:abort.signal});const buffer=await decodeModelResponse(response,chunk.bytes,compressed);if(disposed)return;
@@ -78,7 +78,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
    groups.forEach((gs,system)=>{const geometry=mergeGeometries(gs,false);if(!geometry)throw new Error('Не вдалося зібрати геометрію анатомічної моделі.');geometries.push(geometry);const mesh=new T.Mesh(geometry,mats.get(system as never));mesh.frustumCulled=false;scene.add(mesh);});
    lastState=null;loaded++;onProgress(Math.round(loaded/atlas.chunks.length*100));dirty=true;
   };
-  (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Не вдалося завантажити анатомічну модель.');}})();
+  (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;if(!matchMedia('(prefers-reduced-motion: reduce)').matches&&!latest.current.selected.length){const to=camera.position.clone(),target=controls.target.clone(),offset=to.clone().sub(target);camera.position.copy(target).add(offset.multiplyScalar(1.45).applyAxisAngle(new T.Vector3(0,1,0),-.55));flyTo(to,target,1.6);}}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Не вдалося завантажити анатомічну модель.');}})();
   const fit=(view:string,extent=0)=>{
    const aspect=camera.aspect,mobile=el.clientWidth<768,normalDistance=mobile?Math.max(4.5,1.8*el.clientHeight/Math.max(160,el.clientHeight-350)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))):4;
    const reservedHeight=mobile?350:270;const availableAspect=Math.max(.35,(el.clientWidth-(mobile?40:340))/Math.max(160,el.clientHeight-reservedHeight));const atlasDistance=Math.max(packingHeight,packingWidth/availableAspect)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))*(el.clientHeight/Math.max(160,el.clientHeight-reservedHeight))*1.08;
@@ -133,12 +133,12 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
     const upAxis=camera.up.clone().projectOnPlane(direction).normalize(),rightAxis=new T.Vector3().crossVectors(direction,upAxis).normalize().negate();
     const shift=rightAxis.multiplyScalar(-((left+right)/2-w/2)*worldPerPx).add(upAxis.multiplyScalar(((top+bottom)/2-h/2)*worldPerPx));
     const target=center.clone().add(shift);flyTo(target.clone().addScaledVector(direction,distance),target);}}
-   if(flight){flight.t=Math.min(1,flight.t+dt/.55);const k=1-Math.pow(1-flight.t,3);camera.position.lerpVectors(flight.from,flight.to,k);controls.target.lerpVectors(flight.fromTarget,flight.toTarget,k);dirty=true;if(flight.t>=1)flight=null;}
+   if(flight){flight.t=Math.min(1,flight.t+dt/flight.duration);const k=1-Math.pow(1-flight.t,3);camera.position.lerpVectors(flight.from,flight.to,k);controls.target.lerpVectors(flight.fromTarget,flight.toTarget,k);dirty=true;if(flight.t>=1)flight=null;}
    if(moving&&!s.isolate)fit(amount>.5?'front':s.view,Math.max(0,(amount-.3)/.7));
    const isolateKey=s.isolate?s.selected.join(',')+':'+s.reset+':'+s.inspectorOpen+':'+camera.aspect:'';
    if(isolateKey!==lastIsolate||(s.isolate&&moving)){
     if(s.isolate){const box=new T.Box3();atlas.parts.forEach((p,i)=>{if(s.selected.includes(p.id))box.union(bounds[i].clone().translate(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])));});
-     if(!box.isEmpty()){const center=box.getCenter(new T.Vector3()),size=box.getSize(new T.Vector3());const w=el.clientWidth,h=el.clientHeight,mobile=w<768,landscape=w>h&&h<=600;let left=20,right=w-20,top=mobile?175:110,bottom=h-170;if(s.inspectorOpen){if(landscape){right=w-335;top=100;bottom=h-125;}else if(mobile){const sheet=document.querySelector('.detail-sheet')?.getBoundingClientRect(),header=document.querySelector('.identity')?.getBoundingClientRect();top=(header?.bottom??94)+16;bottom=(sheet?.top??h*.58-139)-16;}else{right=w-370;left=w>1100?285:25;}}const availableWidth=Math.max(150,right-left),availableHeight=Math.max(40,bottom-top);camera.setViewOffset(w,h,w/2-(left+right)/2,h/2-(top+bottom)/2,w,h);const distance=Math.max(.07,Math.max(size.y*h/availableHeight,size.x*w/availableWidth/camera.aspect,size.z)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))*1.35);controls.maxDistance=Math.max(40,distance*2);controls.target.copy(center);camera.position.copy(center).add(new T.Vector3(.2,.1,1).normalize().multiplyScalar(distance));controls.update();dirty=true;}
+     if(!box.isEmpty()){const center=box.getCenter(new T.Vector3()),size=box.getSize(new T.Vector3());const w=el.clientWidth,h=el.clientHeight,mobile=w<768,landscape=w>h&&h<=600;let left=20,right=w-20,top=mobile?175:110,bottom=h-170;if(s.inspectorOpen){if(landscape){right=w-335;top=100;bottom=h-125;}else if(mobile){const sheet=document.querySelector('.detail-sheet')?.getBoundingClientRect(),header=document.querySelector('.identity')?.getBoundingClientRect();top=(header?.bottom??94)+16;bottom=(sheet?.top??h*.58-139)-16;}else{right=w-(w>1100?500:445);left=w>1100?320:25;}}const availableWidth=Math.max(150,right-left),availableHeight=Math.max(40,bottom-top);camera.setViewOffset(w,h,w/2-(left+right)/2,h/2-(top+bottom)/2,w,h);const distance=Math.max(.07,Math.max(size.y*h/availableHeight,size.x*w/availableWidth/camera.aspect,size.z)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))*1.35);controls.maxDistance=Math.max(40,distance*2);controls.target.copy(center);camera.position.copy(center).add(new T.Vector3(.2,.1,1).normalize().multiplyScalar(distance));controls.update();dirty=true;}
     }else if(lastIsolate){camera.clearViewOffset();fit(s.view,amount);}
     lastIsolate=isolateKey;
    }
