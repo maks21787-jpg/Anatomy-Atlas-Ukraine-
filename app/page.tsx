@@ -1,7 +1,7 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type ReactNode} from 'react';
-import {Activity,ArrowLeft,ArrowUpRight,BookOpen,Camera,ChevronRight,CircleHelp,Eye,EyeOff,Focus,Ghost,History,Info,LocateFixed,Maximize,Menu,Moon,NotebookPen,Pause,Plus,RotateCcw,RotateCw,ScanLine,Scissors,Search,Sun,Tags,Trash2,X,ZoomIn,ZoomOut} from 'lucide-react';
+import {Activity,ArrowLeft,ArrowUpRight,BookOpen,Camera,ChevronRight,CircleHelp,Eye,EyeOff,Focus,Ghost,History,Info,LocateFixed,Maximize,Mars,Menu,Moon,MousePointerClick,NotebookPen,Pause,Plus,RotateCcw,RotateCw,ScanLine,Scissors,Search,SlidersHorizontal,Sun,Tags,Trash2,Venus,X,ZoomIn,ZoomOut} from 'lucide-react';
 import {Slider} from '@/components/ui/slider';
 import {Switch} from '@/components/ui/switch';
 import {Sheet,SheetContent,SheetTitle,SheetDescription} from '@/components/ui/sheet';
@@ -42,6 +42,9 @@ export default function Home(){
  const [chosen,setChosen]=useState<Concept|null>(null),[history,setHistory]=useState<Concept[]>([]);
  const [theme,setTheme]=useState<Theme>(storedTheme),[zoom,setZoom]=useState({id:0,factor:1}),[focus,setFocus]=useState(0),[snapshot,setSnapshot]=useState(0);
  const [scan,setScan]=useState<ScanReport>({position:0,crossing:[]}),[notes,setNotes]=useState<Record<string,Note>>(()=>read('atlas-notes',{})),[visits,setVisits]=useState<Visit[]>(()=>read('atlas-visits',[])),[showCoverage,setShowCoverage]=useState(false),[toast,setToast]=useState('');
+ const [guide,setGuide]=useState<number|null>(()=>read('atlas-guide-seen',false)?null:0);
+ const openSearch=()=>{setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),60);};
+ const closeGuide=()=>{setGuide(null);write('atlas-guide-seen',true);};
  const searchInput=useRef<HTMLInputElement>(null),[searchFocused,setSearchFocused]=useState(false);
 
  const modelInfo=MODELS.find(m=>m.id===model)!;
@@ -96,7 +99,7 @@ export default function Home(){
  const keys=useRef<(e:KeyboardEvent)=>void>(()=>{});
  keys.current=(e:KeyboardEvent)=>{
   const typing=e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement;
-  if(e.key==='Escape'){if(typing){(e.target as HTMLElement).blur();return;}if(help){setHelp(false);return;}if(drawer&&!wide){setDrawer(false);return;}if(state.isolate){patch({isolate:false});return;}clear();return;}
+  if(e.key==='Escape'){if(typing){(e.target as HTMLElement).blur();return;}if(guide!==null){closeGuide();return;}if(help){setHelp(false);return;}if(drawer&&!wide){setDrawer(false);return;}if(state.isolate){patch({isolate:false});return;}clear();return;}
   if(typing||e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='/'){e.preventDefault();setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),30);return;}
   if(e.key==='+'||e.key==='='){zoomBy(.75);return;}if(e.key==='-'||e.key==='_'){zoomBy(1/.75);return;}if(e.key==='?'){setHelp(h=>!h);return;}
@@ -126,7 +129,6 @@ export default function Home(){
   {!wide&&drawer&&<div className="scrim" onClick={()=>setDrawer(false)}/>}
   <aside className={`sidebar ${sidebarOpen?'open':''}`} aria-label="Панель атласу">
    <div className="brand"><div className="brand-mark" aria-hidden="true"><span/></div><div><strong>Атлас людини <em>3D</em></strong><small>{atlas?atlas.parts.length.toLocaleString('uk'):'…'} структур · українською й латиною</small></div>{!wide&&<button className="icon-btn" onClick={()=>setDrawer(false)} aria-label="Закрити меню"><X size={20}/></button>}</div>
-   <Segmented<Model> className="model-switch" label="Модель" value={model} onChange={setModel} options={MODELS.map(m=>({id:m.id,label:m.label}))}/>
    <nav className="tabs" role="tablist"><button role="tab" aria-selected={tab==='atlas'} onClick={()=>setTab('atlas')}><Search size={16}/>Атлас</button><button role="tab" aria-selected={tab==='study'} onClick={()=>setTab('study')}><BookOpen size={16}/>Навчання{Object.keys(notes).length>0&&<b>{Object.keys(notes).length}</b>}</button></nav>
    <div className="side-scroll">
    {tab==='atlas'?<>
@@ -178,25 +180,44 @@ export default function Home(){
     </Section>
    </>}
    </div>
-   <footer className="side-foot"><button onClick={()=>setHelp(true)}><CircleHelp size={15}/>Клавіші</button><button onClick={()=>setAbout(true)}><Info size={15}/>Джерела</button></footer>
+   <p className="side-note">{model==="female"?"Жіноча модель: HRA / HuBMAP, CC BY 4.0. ":""}Навчальний ресурс, не для діагностики чи лікування.</p>
+   <footer className="side-foot">{!wide&&<button onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}{theme==='dark'?'Світла тема':'Темна тема'}</button>}<button onClick={()=>{setDrawer(false);setGuide(0);}}><CircleHelp size={15}/>Довідка</button><button onClick={()=>setAbout(true)}><Info size={15}/>Джерела</button></footer>
   </aside>
 
   {/* Top bar */}
   <div className="topbar">
-   {!wide&&<button className="icon-btn raised" onClick={()=>setDrawer(true)} aria-label="Меню"><Menu size={22}/></button>}
-   {!wide&&<div className="mobile-title">Атлас людини <em>3D</em></div>}
-   {wide&&<p className="disclaimer">{model==='female'?'Жіноча модель · HRA / HuBMAP (CC BY 4.0) · ':''}Навчальний ресурс · не для діагностики чи лікування</p>}
+   {!wide&&<button className="menu-btn raised" onClick={()=>setDrawer(true)} aria-label="Меню"><Menu size={20}/><span>Меню</span></button>}
+   <div className="model-pill" role="group" aria-label="Модель тіла">
+    <button aria-pressed={model==='male'} onClick={()=>setModel('male')}><Mars size={18}/><span><b>Чоловік</b><small>усе тіло</small></span></button>
+    <button aria-pressed={model==='female'} onClick={()=>setModel('female')}><Venus size={18}/><span><b>Жінка</b><small>тулуб</small></span></button>
+   </div>
    <div className="top-actions">
-    {!wide&&<button className="icon-btn raised" onClick={()=>{setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),60);}} aria-label="Пошук"><Search size={20}/></button>}
-    <button className="icon-btn raised" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} aria-label={theme==='dark'?'Світла тема':'Темна тема'} title={theme==='dark'?'Світла тема':'Темна тема'}>{theme==='dark'?<Sun size={20}/>:<Moon size={20}/>}</button>
-    {wide&&<button className="icon-btn raised" onClick={()=>setHelp(true)} aria-label="Клавіші" title="Клавіші (?)"><CircleHelp size={20}/></button>}
+    {wide&&<button className="icon-btn raised" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} aria-label={theme==='dark'?'Світла тема':'Темна тема'} title={theme==='dark'?'Світла тема':'Темна тема'}>{theme==='dark'?<Sun size={20}/>:<Moon size={20}/>}</button>}
+    <button className="icon-btn raised" onClick={()=>setGuide(0)} aria-label="Як користуватися" title="Як користуватися"><CircleHelp size={20}/></button>
    </div>
   </div>
+
+  {/* Quick tools: the most used modes, always on screen */}
+  <div className="quickbar" role="toolbar" aria-label="Швидкі інструменти">
+   <button onClick={openSearch}><Search size={17}/><span>Пошук</span></button>
+   <button aria-pressed={!!state.glass} onClick={()=>patch({glass:!state.glass})}><Ghost size={17}/><span>Скляне тіло</span></button>
+   <button aria-pressed={!!state.labels} onClick={()=>patch({labels:state.labels?null:'uk'})}><Tags size={17}/><span>Підписи</span></button>
+   <button aria-pressed={!!state.section} onClick={()=>patch({section:state.section?null:{axis:'axial',position:.35},explode:0})}><Scissors size={17}/><span>Зріз</span></button>
+   <button aria-pressed={!!state.scan?.on} onClick={()=>setState(s=>({...s,explode:0,scan:{on:!s.scan?.on,hold:false,position:scan.position}}))}><ScanLine size={17}/><span>Сканер</span></button>
+   {!wide&&<button onClick={()=>{setTab('atlas');setDrawer(true);}}><SlidersHorizontal size={17}/><span>Усі налаштування</span></button>}
+  </div>
+
+  {state.section&&<div className="tool-pop glass" aria-label="Налаштування зрізу"><div className="tool-pop-head"><Scissors size={15}/>Зріз<button className="icon-btn small" onClick={()=>patch({section:null})} aria-label="Вимкнути зріз"><X size={16}/></button></div>
+   <Segmented<SectionAxis> label="Площина зрізу" value={state.section.axis} onChange={axis=>setState(s=>({...s,section:{axis,position:s.section?.position??.35}}))} options={SECTIONS}/>
+   <Slider aria-label="Положення зрізу" min={0} max={1000} step={1} value={[state.section.position*1000]} onValueChange={v=>{const n=(Array.isArray(v)?v[0]:v)/1000;setState(s=>s.section?{...s,section:{...s.section,position:n}}:s);}}/>
+   <div className="slider-ends"><span>{state.section.axis==='axial'?'Голова':state.section.axis==='coronal'?'Спереду':'Праворуч'}</span><span>{state.section.axis==='axial'?'Низ':state.section.axis==='coronal'?'Ззаду':'Ліворуч'}</span></div></div>}
 
   {/* Scanner readout */}
   {state.scan?.on&&<div className="scan-panel glass"><div className="scan-title"><ScanLine size={15}/>Перетинає зараз<span>{Math.round((state.scan.hold?state.scan.position:scan.position)*100)}%</span></div>
    {crossingNames.length?<ul>{crossingNames.map(p=><li key={p.id}><button onClick={()=>selectPart(p.id,false)}>{p.name}{p.nameLa&&<em>{p.nameLa}</em>}</button></li>)}</ul>:<p>Площина між структурами</p>}
-   {scan.crossing.length>6&&<small>і ще {scan.crossing.length-6}</small>}</div>}
+   {scan.crossing.length>6&&<small>і ще {scan.crossing.length-6}</small>}
+   <Slider aria-label="Рівень сканера" min={0} max={1000} step={1} value={[(state.scan.hold?state.scan.position:scan.position)*1000]} onValueChange={v=>{const n=(Array.isArray(v)?v[0]:v)/1000;setState(s=>({...s,scan:{on:true,hold:true,position:n}}));}}/>
+   <div className="scan-actions">{state.scan.hold?<button className="link" onClick={()=>setState(s=>({...s,scan:{...s.scan!,hold:false}}))}>Продовжити рух</button>:<span>Потягніть повзунок, щоб зупинити на рівні</span>}<button className="link" onClick={()=>setState(s=>({...s,scan:{...s.scan!,on:false}}))}>Вимкнути</button></div></div>}
 
   {/* Selection bar and camera controls */}
   <div className="dock">
@@ -240,6 +261,19 @@ export default function Home(){
   {progress<100&&!error&&<div className="loading glass" role="status"><div className="spinner"/><div><strong>Готуємо анатомічну модель</strong><span>{progress}% · {atlas?.parts.length.toLocaleString('uk')??'…'} структур</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
   {error&&<div className="loading glass error" role="alert"><p>{error}</p><button className="btn" onClick={()=>location.reload()}>Перезавантажити</button></div>}
 
+  {guide!==null&&(()=>{const steps=[
+   {icon:<Mars size={22}/>,icon2:<Venus size={22}/>,title:'Оберіть модель',text:'Угорі по центру є перемикач «Чоловік» (усе тіло) і «Жінка» (тулуб: таз, хребет, органи живота й малого таза, молочні залози).'},
+   {icon:<MousePointerClick size={22}/>,title:'Клацніть будь-яку структуру',text:'Наведіть курсор, щоб побачити назву. Клацніть, щоб відкрити картку з українською й латинською назвою та описом. Перетягуйте, щоб обертати, колесом або двома пальцями змінюйте масштаб.'},
+   {icon:<Search size={22}/>,title:'Шукайте будь-якою мовою',text:'Кнопка «Пошук» відкриває поле пошуку. Пишіть українською, латиною чи англійською, слова в будь-якому порядку: «нирка ліва», «ovarium».'},
+   {icon:<Ghost size={22}/>,title:'Швидкі інструменти',text:'Під перемикачем моделі: «Скляне тіло» робить усе прозорим, крім вибраного; «Підписи» називають вибране на полях; «Зріз» розрізає тіло; «Сканер» проходить тілом і називає структури.'},
+   {icon:<SlidersHorizontal size={22}/>,title:'Усе інше — у бічній панелі',text:wide?'Ліворуч: системи органів (показати, сховати, рентген), розбирання на елементи, збереження зображення. Вкладка «Навчання» зберігає нотатки й історію.':'Кнопка «Меню» ліворуч угорі відкриває системи органів, розбирання на елементи, збереження зображення й вкладку «Навчання» з нотатками.'},
+  ];const st=steps[guide];return <div className="modal-scrim" onClick={closeGuide}><div className="guide glass" role="dialog" aria-label="Як користуватися атласом" onClick={e=>e.stopPropagation()}>
+   <div className="guide-top"><span>Як користуватися · {guide+1} з {steps.length}</span><button className="icon-btn small" onClick={closeGuide} aria-label="Закрити"><X size={18}/></button></div>
+   <div className="guide-icon" key={guide}>{st.icon}{st.icon2}</div><h2 key={'t'+guide}>{st.title}</h2><p key={'p'+guide}>{st.text}</p>
+   <div className="guide-dots">{steps.map((_,i)=><button key={i} aria-label={`Крок ${i+1}`} aria-current={i===guide} onClick={()=>setGuide(i)}/>)}</div>
+   <div className="guide-nav">{guide>0?<button className="btn" onClick={()=>setGuide(guide-1)}>Назад</button>:<button className="btn" onClick={closeGuide}>Пропустити</button>}{guide<steps.length-1?<button className="btn primary" onClick={()=>setGuide(guide+1)}>Далі</button>:<button className="btn primary" onClick={closeGuide}>Почати</button>}</div>
+   {wide&&<button className="link guide-keys" onClick={()=>{closeGuide();setHelp(true);}}>Клавіатурні скорочення</button>}
+  </div></div>;})()}
   {help&&<div className="modal-scrim" onClick={()=>setHelp(false)}><div className="help glass" role="dialog" aria-label="Клавіші" onClick={e=>e.stopPropagation()}><header><h2>Керування</h2><button className="icon-btn" onClick={()=>setHelp(false)} aria-label="Закрити"><X size={20}/></button></header>
    <p className="hint">Мишею: перетягування обертає, права кнопка зсуває, колесо масштабує в точку під курсором. На телефоні: один палець обертає, два масштабують.</p>
    <dl>{SHORTCUTS.map(([k,v])=><div key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></div>)}</dl></div></div>}
