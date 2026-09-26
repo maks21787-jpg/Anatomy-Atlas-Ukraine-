@@ -17,6 +17,10 @@ Ukrainian adaptation: the interface and all 3,432 concept names and 2,234 mesh n
 
 BodyParts3D represents an adult male reference anatomy based on TARO MRI and anatomical illustration refinements. It is not a complete model of every possible human anatomical structure or variation. This interface is educational and is not a clinical tool.
 
+## Female trunk model (included)
+
+Human Reference Atlas (HRA) 3D Reference Organ Library, HuBMAP Consortium / NIH, `ref-organ/united-female` v1.5, derived from the Visible Human Female dataset (U.S. National Library of Medicine). CC BY 4.0. Selection of 264 structures and Terminologia Anatomica 2 Latin names from the open asset files of Anatria3D (https://github.com/Nurkan1/Anatria-3D, `public/anatomy/*_female.glb`, `manifest_female.json`, CC BY 4.0). Converted with `scripts/convert-female-hra.mjs`: vertices welded, geometry simplified with a 0.2% relative error bound, grouped by the source hierarchy, Ukrainian names added. Details in `public/models/female/NOTICE.md`.
+
 ## Historical assets (not included in the current release)
 
 Earlier repository revisions included female reference anatomy: Kristen Browne and Heidi Schlehlein, Human Reference Atlas / HuBMAP, *3D Reference Organ Set for Female v1.5* (2023). CC BY 4.0. Geometry adapted for this viewer.

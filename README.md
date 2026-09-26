@@ -6,6 +6,13 @@
 
 Проєкт є українською адаптацією [ashemag/human-atlas](https://github.com/ashemag/human-atlas).
 
+## Моделі
+
+- **Чоловік · тіло** — BodyParts3D 4.0 (DBCLS, CC BY 4.0): 2 234 елементи, 3 432 названі поняття, повне тіло.
+- **Жінка · тулуб** — Human Reference Atlas 3D Reference Organ Library (HuBMAP / NIH, CC BY 4.0), реконструйована за Visible Human Female: 264 структури хребта, таза, органів черевної порожнини й малого таза, судин і молочних залоз. Вибірку структур і латинські назви за Terminologia Anatomica 2 взято з відкритих даних проєкту [Anatria3D](https://github.com/Nurkan1/Anatria-3D) (файли `*_female.glb`, `manifest_female.json`, CC BY 4.0). Модель перетворено скриптом `scripts/convert-female-hra.mjs`, джерела й зміни описано в `public/models/female/NOTICE.md`.
+
+Моделі зберігаються в окремих теках (`public/models/` і `public/models/female/`) і перемикаються в бічній панелі.
+
 ## Можливості
 
 - **Пошук** українською, латиною та англійською: слова в будь-якому порядку й відмінку («нирки ліва», «arteria renalis»), підсвічування збігів, навігація стрілками.

@@ -14,7 +14,11 @@ const VIEWS:{id:View;short:string;label:string;key:string}[]=[
 ];
 const SECTIONS:{id:SectionAxis;label:string}[]=[{id:'axial',label:'Поперечний'},{id:'coronal',label:'Фронтальний'},{id:'sagittal',label:'Сагітальний'}];
 const ORGANS:SystemId[]=['cardiac','respiratory','digestive','urinary','endocrine','reproductive'];
-const POPULAR=['heart','brain','liver','stomach','spleen','pancreas','kidney','lung','urinary bladder','trachea','femur','skull'];
+type Model='male'|'female';
+const MODELS:{id:Model;label:string;dir:string;popular:string[]}[]=[
+ {id:'male',label:'Чоловік · тіло',dir:'models/',popular:['heart','brain','liver','stomach','spleen','pancreas','kidney','lung','urinary bladder','trachea','femur','skull']},
+ {id:'female',label:'Жінка · тулуб',dir:'models/female/',popular:['uterus','ovary','uterine tube','breast','vagina','kidney','liver','pancreas','spleen','urinary bladder','hip bone','vertebral column']},
+];
 const PAGE=60;
 const SHORTCUTS:[string,string][]=[['/','Пошук'],['Esc','Скасувати вибір, закрити панель'],['Ctrl + клік','Вибрати кілька структур'],['I','Ізолювати вибране'],['H','Сховати вибране'],['U','Показати приховане'],['F','Наблизити до вибраного'],['+ / −','Масштаб'],['0','Вписати тіло в екран'],['1–5','Спереду, ззаду, зліва, справа, згори'],['L','Підписи'],['G','Скляне тіло'],['S','Сканер']];
 function plural(n:number,one:string,few:string,many:string){const m10=n%10,m100=n%100;return m10===1&&m100!==11?one:m10>=2&&m10<=4&&(m100<12||m100>14)?few:many;}
@@ -32,7 +36,7 @@ const initial:SceneState={explode:0,visible:DEFAULT_VISIBLE,selected:[],isolate:
 
 export default function Home(){
  const wide=useWide();
- const [atlas,setAtlas]=useState<Atlas|null>(null),[state,setState]=useState(initial),[progress,setProgress]=useState(0),[error,setError]=useState('');
+ const [model,setModel]=useState<Model>(()=>read<Model>('atlas-model','male')==='female'?'female':'male'),[atlas,setAtlas]=useState<Atlas|null>(null),[state,setState]=useState(initial),[progress,setProgress]=useState(0),[error,setError]=useState('');
  const [tab,setTab]=useState<'atlas'|'study'>('atlas'),[drawer,setDrawer]=useState(false),[details,setDetails]=useState(false),[about,setAbout]=useState(false),[help,setHelp]=useState(false);
  const [query,setQuery]=useState(''),[filterSystem,setFilterSystem]=useState<SystemId|null>(null),[limit,setLimit]=useState(PAGE),[cursor,setCursor]=useState(0);
  const [chosen,setChosen]=useState<Concept|null>(null),[history,setHistory]=useState<Concept[]>([]);
@@ -40,8 +44,9 @@ export default function Home(){
  const [scan,setScan]=useState<ScanReport>({position:0,crossing:[]}),[notes,setNotes]=useState<Record<string,Note>>(()=>read('atlas-notes',{})),[visits,setVisits]=useState<Visit[]>(()=>read('atlas-visits',[])),[showCoverage,setShowCoverage]=useState(false),[toast,setToast]=useState('');
  const searchInput=useRef<HTMLInputElement>(null),[searchFocused,setSearchFocused]=useState(false);
 
- useEffect(()=>{const abort=new AbortController();const load=(url:string)=>fetch(url,{signal:abort.signal}).then(r=>{if(!r.ok)throw new Error('Не вдалося завантажити анатомічний каталог.');return r.json();});
-  Promise.all([load('models/atlas.json'),load('models/names-uk.json'),load('models/names-la.json')]).then(([data,uk,la])=>setAtlas(localizeAtlas(data as Atlas,uk as Record<string,string>,la as Record<string,string>))).catch(e=>{if(e.name!=='AbortError')setError(e.message);});return()=>abort.abort();},[]);
+ const modelInfo=MODELS.find(m=>m.id===model)!;
+ useEffect(()=>{write('atlas-model',model);const abort=new AbortController();setAtlas(null);setProgress(0);setError('');setChosen(null);setDetails(false);setHistory([]);setQuery('');setFilterSystem(null);setScan({position:0,crossing:[]});setState(s=>({...initial,labels:s.labels,reset:s.reset+1}));const dir=MODELS.find(m=>m.id===model)!.dir;const load=(url:string)=>fetch(url,{signal:abort.signal}).then(r=>{if(!r.ok)throw new Error('Не вдалося завантажити анатомічний каталог.');return r.json();});
+  Promise.all([load(dir+'atlas.json'),load(dir+'names-uk.json'),load(dir+'names-la.json')]).then(([data,uk,la])=>setAtlas(localizeAtlas(data as Atlas,uk as Record<string,string>,la as Record<string,string>))).catch(e=>{if(e.name!=='AbortError')setError(e.message);});return()=>abort.abort();},[model]);
  useEffect(()=>{document.documentElement.dataset.theme=theme;document.querySelector('meta[name=theme-color]')?.setAttribute('content',theme==='dark'?'#0b1016':'#eef1f3');write('atlas-theme-v2',theme);},[theme]);
  useEffect(()=>write('atlas-notes',notes),[notes]);useEffect(()=>write('atlas-visits',visits),[visits]);
  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),2200);return()=>clearTimeout(t);},[toast]);
@@ -57,7 +62,7 @@ export default function Home(){
  const conceptById=useMemo(()=>new Map(atlas?.concepts.map(c=>[c.id,c])),[atlas]);
  const tokens=useMemo(()=>tokenize(query),[query]);
  const searching=tokens.length>0||!!filterSystem;
- const results=useMemo(()=>{if(!atlas)return[];const inSystem=filterSystem?(c:Concept)=>conceptSystem.get(c.id)===filterSystem:undefined;if(tokens.length)return searchConcepts(index,query,inSystem);if(inSystem)return atlas.concepts.filter(inSystem).sort((a,b)=>a.name.localeCompare(b.name,'uk'));return POPULAR.map(name=>atlas.concepts.find(c=>(c.nameEn??c.name).toLowerCase()===name)).filter((x):x is Concept=>!!x);},[atlas,index,query,tokens,filterSystem,conceptSystem]);
+ const results=useMemo(()=>{if(!atlas)return[];const inSystem=filterSystem?(c:Concept)=>conceptSystem.get(c.id)===filterSystem:undefined;if(tokens.length)return searchConcepts(index,query,inSystem);if(inSystem)return atlas.concepts.filter(inSystem).sort((a,b)=>a.name.localeCompare(b.name,'uk'));return modelInfo.popular.map(name=>atlas.concepts.find(c=>(c.nameEn??c.name).toLowerCase()===name)).filter((x):x is Concept=>!!x);},[atlas,index,query,tokens,filterSystem,conceptSystem,modelInfo]);
  useEffect(()=>{setLimit(PAGE);setCursor(0);},[query,filterSystem]);
  const shown=results.slice(0,limit);
  const parents=useMemo(()=>{if(!chosen||!state.selected.length)return[];const first=conceptsByPart.get(state.selected[0])??[];return first.filter(c=>c.id!==chosen.id&&c.elements.length>state.selected.length&&state.selected.every(id=>c.elements.includes(id))).sort((a,b)=>a.elements.length-b.elements.length).slice(0,6);},[chosen,state.selected,conceptsByPart]);
@@ -115,12 +120,13 @@ export default function Home(){
  const note=chosen&&chosen.id!=='selection'?notes[chosen.id]?.text??'':'';
 
  return <main className={`studio ${sidebarOpen?'with-sidebar':''} ${details&&selectedParts.length?'with-detail':''}`}>
-  {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0,theme,zoom,focus,snapshot,coverage:state.scan?.on?null:coverage,insets}} onSelect={selectPart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError} onScan={setScan}/>}
+  {atlas&&<AnatomyScene key={model} atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0,theme,zoom,focus,snapshot,coverage:state.scan?.on?null:coverage,insets}} onSelect={selectPart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError} onScan={setScan}/>}
 
   {/* Sidebar */}
   {!wide&&drawer&&<div className="scrim" onClick={()=>setDrawer(false)}/>}
   <aside className={`sidebar ${sidebarOpen?'open':''}`} aria-label="Панель атласу">
-   <div className="brand"><div className="brand-mark" aria-hidden="true"><span/></div><div><strong>Атлас людини <em>3D</em></strong><small>{atlas?atlas.parts.length.toLocaleString('uk'):'2 234'} структур · українською й латиною</small></div>{!wide&&<button className="icon-btn" onClick={()=>setDrawer(false)} aria-label="Закрити меню"><X size={20}/></button>}</div>
+   <div className="brand"><div className="brand-mark" aria-hidden="true"><span/></div><div><strong>Атлас людини <em>3D</em></strong><small>{atlas?atlas.parts.length.toLocaleString('uk'):'…'} структур · українською й латиною</small></div>{!wide&&<button className="icon-btn" onClick={()=>setDrawer(false)} aria-label="Закрити меню"><X size={20}/></button>}</div>
+   <Segmented<Model> className="model-switch" label="Модель" value={model} onChange={setModel} options={MODELS.map(m=>({id:m.id,label:m.label}))}/>
    <nav className="tabs" role="tablist"><button role="tab" aria-selected={tab==='atlas'} onClick={()=>setTab('atlas')}><Search size={16}/>Атлас</button><button role="tab" aria-selected={tab==='study'} onClick={()=>setTab('study')}><BookOpen size={16}/>Навчання{Object.keys(notes).length>0&&<b>{Object.keys(notes).length}</b>}</button></nav>
    <div className="side-scroll">
    {tab==='atlas'?<>
@@ -179,7 +185,7 @@ export default function Home(){
   <div className="topbar">
    {!wide&&<button className="icon-btn raised" onClick={()=>setDrawer(true)} aria-label="Меню"><Menu size={22}/></button>}
    {!wide&&<div className="mobile-title">Атлас людини <em>3D</em></div>}
-   {wide&&<p className="disclaimer">Навчальний ресурс · не для діагностики чи лікування</p>}
+   {wide&&<p className="disclaimer">{model==='female'?'Жіноча модель · HRA / HuBMAP (CC BY 4.0) · ':''}Навчальний ресурс · не для діагностики чи лікування</p>}
    <div className="top-actions">
     {!wide&&<button className="icon-btn raised" onClick={()=>{setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),60);}} aria-label="Пошук"><Search size={20}/></button>}
     <button className="icon-btn raised" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} aria-label={theme==='dark'?'Світла тема':'Темна тема'} title={theme==='dark'?'Світла тема':'Темна тема'}>{theme==='dark'?<Sun size={20}/>:<Moon size={20}/>}</button>
@@ -231,13 +237,13 @@ export default function Home(){
   </aside>}
 
   {toast&&<div className="toast glass" role="status">{toast}</div>}
-  {progress<100&&!error&&<div className="loading glass" role="status"><div className="spinner"/><div><strong>Готуємо анатомічну модель</strong><span>{progress}% · {atlas?.parts.length.toLocaleString('uk')??'2 234'} структур</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
+  {progress<100&&!error&&<div className="loading glass" role="status"><div className="spinner"/><div><strong>Готуємо анатомічну модель</strong><span>{progress}% · {atlas?.parts.length.toLocaleString('uk')??'…'} структур</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
   {error&&<div className="loading glass error" role="alert"><p>{error}</p><button className="btn" onClick={()=>location.reload()}>Перезавантажити</button></div>}
 
   {help&&<div className="modal-scrim" onClick={()=>setHelp(false)}><div className="help glass" role="dialog" aria-label="Клавіші" onClick={e=>e.stopPropagation()}><header><h2>Керування</h2><button className="icon-btn" onClick={()=>setHelp(false)} aria-label="Закрити"><X size={20}/></button></header>
    <p className="hint">Мишею: перетягування обертає, права кнопка зсуває, колесо масштабує в точку під курсором. На телефоні: один палець обертає, два масштабують.</p>
    <dl>{SHORTCUTS.map(([k,v])=><div key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></div>)}</dl></div></div>}
 
-  <Sheet open={about} onOpenChange={setAbout}><SheetContent className="about-sheet"><div className="eyebrow">Джерело й охоплення</div><SheetTitle className="about-title">Тіло людини в 3D</SheetTitle><SheetDescription>Референсна анатомія дорослого чоловіка з бази BodyParts3D.</SheetDescription><div className="about-copy"><p><strong>Чоловік · BodyParts3D</strong><br/>2 234 окремі 3D-моделі та 3 432 названі анатомічні поняття.</p><p>Модель не охоплює всіх структур тіла людини та їхніх варіантів. Геометрію спрощено для вебу, а короткі пояснення дають загальний навчальний контекст. Атлас не призначений для діагностики чи планування операцій.</p><h3>Мови</h3><p>Назви структур перекладено українською й доповнено латинськими назвами за Міжнародною анатомічною термінологією. Оригінальні англійські назви збережено; шукати можна будь-якою з трьох мов.</p><h3>Ваші дані</h3><p>Нотатки, історія переглядів і тема зберігаються лише у вашому браузері й нікуди не надсилаються.</p><h3>Джерело</h3><p>BodyParts3D, © The Database Center for Life Science, ліцензія CC Attribution 4.0 International.</p><a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html" target="_blank" rel="noreferrer">Ліцензія набору даних <ArrowUpRight size={14}/></a><a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html" target="_blank" rel="noreferrer">Оригінальна геометрія та метадані <ArrowUpRight size={14}/></a><a href="https://academic.oup.com/nar/article/37/suppl_1/D782/1000752" target="_blank" rel="noreferrer">Публікація про джерело даних <ArrowUpRight size={14}/></a></div></SheetContent></Sheet>
+  <Sheet open={about} onOpenChange={setAbout}><SheetContent className="about-sheet"><div className="eyebrow">Джерело й охоплення</div><SheetTitle className="about-title">Тіло людини в 3D</SheetTitle><SheetDescription>Дві моделі: повне тіло дорослого чоловіка (BodyParts3D) і жіночий тулуб (Human Reference Atlas).</SheetDescription><div className="about-copy"><p><strong>Чоловік · BodyParts3D</strong><br/>2 234 окремі 3D-моделі та 3 432 названі анатомічні поняття.</p><p>Модель не охоплює всіх структур тіла людини та їхніх варіантів. Геометрію спрощено для вебу, а короткі пояснення дають загальний навчальний контекст. Атлас не призначений для діагностики чи планування операцій.</p><p><strong>Жінка · Human Reference Atlas</strong><br/>264 структури тулуба (хребет, таз, органи черевної порожнини й малого таза, судини, молочні залози) з 3D Reference Organ Library (HuBMAP / NIH, CC BY 4.0), реконструйованої за Visible Human Female. Вибірку й латинські назви за Terminologia Anatomica 2 взято з відкритих даних проєкту Anatria3D.</p><a href="https://humanatlas.io/" target="_blank" rel="noreferrer">Human Reference Atlas <ArrowUpRight size={14}/></a><h3>Мови</h3><p>Назви структур перекладено українською й доповнено латинськими назвами за Міжнародною анатомічною термінологією. Оригінальні англійські назви збережено; шукати можна будь-якою з трьох мов.</p><h3>Ваші дані</h3><p>Нотатки, історія переглядів і тема зберігаються лише у вашому браузері й нікуди не надсилаються.</p><h3>Джерело</h3><p>BodyParts3D, © The Database Center for Life Science, ліцензія CC Attribution 4.0 International.</p><a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html" target="_blank" rel="noreferrer">Ліцензія набору даних <ArrowUpRight size={14}/></a><a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html" target="_blank" rel="noreferrer">Оригінальна геометрія та метадані <ArrowUpRight size={14}/></a><a href="https://academic.oup.com/nar/article/37/suppl_1/D782/1000752" target="_blank" rel="noreferrer">Публікація про джерело даних <ArrowUpRight size={14}/></a></div></SheetContent></Sheet>
  </main>;
 }

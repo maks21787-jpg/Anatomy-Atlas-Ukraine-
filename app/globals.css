@@ -154,3 +154,4 @@ html[data-theme=light] .segmented button[aria-pressed=true]{background:#fff}
 .dock{flex-direction:column;align-items:center;justify-content:flex-end}.camera-bar{margin-left:0}
 @media(max-width:899px){.dock{align-items:stretch}}
 @media(max-width:480px){.camera-bar .zoom-btn{display:none}.camera-bar{justify-content:space-around}}
+.model-switch{margin:0 16px 10px}.model-switch button{font-size:14px}

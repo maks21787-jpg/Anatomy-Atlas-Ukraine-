@@ -53,6 +53,8 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
 
   // Body extent drives the section planes and the scanner travel.
   const body=new T.Box3();atlas.parts.forEach(p=>{body.expandByPoint(new T.Vector3().fromArray(p.bounds[0]));body.expandByPoint(new T.Vector3().fromArray(p.bounds[1]));});
+  // Exploded layouts and the stage are placed relative to the model, which may be a whole body or a trunk.
+  const midY=(body.min.y+body.max.y)/2;ground.position.y=body.min.y-.019;platform.position.y=body.min.y-.016;ring.position.y=innerRing.position.y=body.min.y+.001;const stage=T.MathUtils.clamp(body.getSize(new T.Vector3()).x/.66,.45,1);[platform,ring,innerRing].forEach(m=>m.scale.set(stage,m===platform?1:stage,m===platform?stage:1));
 
   // Per-part state lives in two textures the shaders read by part index.
   // partTexture: xyz explosion offset, w visible. flagTexture: r selected, g ghost (x-ray), b glow (scanner or study coverage), a hover.
@@ -140,11 +142,12 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
   const fit=(view:View,extent=0)=>{
    const {w,h,freeW,freeH}=freeArea();
    if(extent>.8)view='front';
-   const bodyH=view==='top'?.75:1.82,bodyW=view==='left'||view==='right'?.4:view==='top'?.75:.75;
+   const size=body.getSize(new T.Vector3()),center=body.getCenter(new T.Vector3());
+   const bodyH=view==='top'?Math.max(size.x,size.z)*1.1:size.y+.09,bodyW=view==='left'||view==='right'?size.z+.1:size.x*1.05+.05;
    const normalDistance=Math.max(bodyH*h/freeH,bodyW*w/freeW/camera.aspect)/(2*tanHalf())*1.06;
    const atlasDistance=Math.max(packingHeight*h/freeH,packingWidth*w/freeW/camera.aspect)/(2*tanHalf())*1.06;
    const distance=T.MathUtils.lerp(normalDistance,Math.max(.2,atlasDistance),extent);
-   flight=null;controls.target.set(0,extent>.1?.85:view==='top'?.9:.86,0);camera.position.copy(controls.target).addScaledVector(DIRECTIONS[view],distance);controls.update();dirty=true;
+   flight=null;controls.target.set(0,extent>.1?midY:center.y,0);camera.position.copy(controls.target).addScaledVector(DIRECTIONS[view],distance);controls.update();dirty=true;
   };
   const resize=()=>{layoutKey='';lastState=null;renderer.setPixelRatio(Math.min(devicePixelRatio,el.clientWidth<768||el.clientHeight<600?1.5:2));camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight);svg.setAttribute('viewBox',`0 0 ${el.clientWidth} ${el.clientHeight}`);fit(latest.current.view,amount);};const observer=new ResizeObserver(resize);observer.observe(el);
 
@@ -220,12 +223,12 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
     const isShown=(p:typeof atlas.parts[number])=>!hidden.has(p.id)&&(s.isolate?selection.has(p.id):visible.has(p.system)||selection.has(p.id));
     const visibleParts=atlas.parts.filter(isShown);
     const nextLayoutKey=visibleParts.map(p=>p.id).join(',')+':'+camera.aspect.toFixed(3);
-    if(nextLayoutKey!==layoutKey){const layout=createExplosionLayout(visibleParts,camera.aspect);packingWidth=layout.width;packingHeight=layout.height;atlas.parts.forEach((p,i)=>{const cell=layout.cells.get(p.id);offsets[i]=cell?new T.Vector3(cell.x,cell.y+.85,0):centers[i].clone();});layoutKey=nextLayoutKey;if(amount>.05&&!s.isolate)fit(s.view,Math.max(0,(amount-.3)/.7));}
+    if(nextLayoutKey!==layoutKey){const layout=createExplosionLayout(visibleParts,camera.aspect);packingWidth=layout.width;packingHeight=layout.height;atlas.parts.forEach((p,i)=>{const cell=layout.cells.get(p.id);offsets[i]=cell?new T.Vector3(cell.x,cell.y+midY,0):centers[i].clone();});layoutKey=nextLayoutKey;if(amount>.05&&!s.isolate)fit(s.view,Math.max(0,(amount-.3)/.7));}
     atlas.parts.forEach((p,i)=>{
      const c=centers[i],destination=offsets[i];let dx=0,dy=0,dz=0;
      const group=SYSTEMS.findIndex(sys=>sys.id===p.system),angle=group/SYSTEMS.length*Math.PI*2;
-     if(amount<=.45){const t=amount/.45;dx=Math.sin(angle)*t*.48;dy=(c.y-.85)*t*.28;dz=Math.cos(angle)*t*.48;}
-     else {const t=(amount-.45)/.55;dx=T.MathUtils.lerp(Math.sin(angle)*.48,destination.x-c.x,t);dy=T.MathUtils.lerp((c.y-.85)*.28,destination.y-c.y,t);dz=T.MathUtils.lerp(Math.cos(angle)*.48,-c.z,t);}
+     if(amount<=.45){const t=amount/.45;dx=Math.sin(angle)*t*.48;dy=(c.y-midY)*t*.28;dz=Math.cos(angle)*t*.48;}
+     else {const t=(amount-.45)/.55;dx=T.MathUtils.lerp(Math.sin(angle)*.48,destination.x-c.x,t);dy=T.MathUtils.lerp((c.y-midY)*.28,destination.y-c.y,t);dz=T.MathUtils.lerp(Math.cos(angle)*.48,-c.z,t);}
      data.set([dx,dy,dz,isShown(p)?1:0],i*4);
      markerPositions.set(data[i*4+3]>.5?[c.x+dx,c.y+dy,c.z+dz]:[10000,10000,10000],i*3);const mesh=pickers[i];if(mesh){mesh.position.set(dx,dy,dz);mesh.updateMatrix();mesh.updateMatrixWorld(true);}
     });partTexture.needsUpdate=true;markerGeometry.attributes.position.needsUpdate=true;lastState=s;lastExtent=amount;dirty=true;
