@@ -12,7 +12,8 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
  const host=useRef<HTMLDivElement>(null),latest=useRef(state),select=useRef(onSelect);
  latest.current=state;select.current=onSelect;
  useEffect(()=>{
-  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=0;
+  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=0,lastTheme='',lastZoom=0,lastFocus=0;
+  let flight:{from:T.Vector3;to:T.Vector3;fromTarget:T.Vector3;toTarget:T.Vector3;t:number}|null=null;
   let lastState:SceneState|null=null;
   const abort=new AbortController();
   let renderer:T.WebGLRenderer;
@@ -22,7 +23,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.005,100),controls=new OrbitControls(camera,renderer.domElement);
   camera.position.set(1.4,1.05,3.6);controls.target.set(0,.85,0);controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;controls.addEventListener('change',()=>{dirty=true;});
   const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);scene.environment=env.texture;room.dispose();pmrem.dispose();
-  scene.add(new T.HemisphereLight(0xffffff,0xa7acb2,1.05));
+  const hemi=new T.HemisphereLight(0xffffff,0xa7acb2,1.05);scene.add(hemi);
   const key=new T.DirectionalLight(0xfffaf4,2.3);key.position.set(-2,4,3);scene.add(key);
   const rim=new T.DirectionalLight(0xe9f0ff,1.8);rim.position.set(2,2,-3);scene.add(rim);
   const ground=new T.Mesh(new T.CircleGeometry(30,96),new T.MeshStandardMaterial({color:0xd5d9dc,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
@@ -58,6 +59,9 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
    };materials.push(m);return m;
   };
   const mats=new Map(SYSTEMS.map(s=>[s.id,materialFor(s.id)]));
+  const THEMES={light:{clear:'#f2f3f3',ground:0xd5d9dc,platform:0xeeeeec,ring:0x8c969f,marker:0x64748b,hemi:1.05},dark:{clear:'#0f1419',ground:0x07090c,platform:0x121820,ring:0x4d5966,marker:0x9fb0c0,hemi:.8}};
+  const applyTheme=(theme:'light'|'dark')=>{const t=THEMES[theme];renderer.setClearColor(t.clear);(ground.material as T.MeshStandardMaterial).color.setHex(t.ground);(platform.material as T.MeshStandardMaterial).color.setHex(t.platform);(ring.material as T.MeshBasicMaterial).color.setHex(t.ring);(innerRing.material as T.MeshBasicMaterial).color.setHex(t.ring);markerMaterial.color.setHex(t.marker);hemi.intensity=t.hemi;dirty=true;};
+  const flyTo=(position:T.Vector3,target:T.Vector3)=>{flight={from:camera.position.clone(),to:position,fromTarget:controls.target.clone(),toTarget:target,t:0};};
   let loaded=0;
   const loadChunk=async(ci:number)=>{
    const chunk=atlas.chunks[ci],compressed=!!chunk.gzip&&typeof DecompressionStream!=='undefined';const response=await fetch((compressed?chunk.gzip!:chunk.url).replace(/^\//,''),{signal:abort.signal});const buffer=await decodeModelResponse(response,chunk.bytes,compressed);if(disposed)return;
@@ -114,7 +118,22 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
      markerPositions.set(data[i*4+3]>.5?[c.x+dx,c.y+dy,c.z+dz]:[10000,10000,10000],i*3);const mesh=pickers[i];if(mesh){mesh.position.set(dx,dy,dz);mesh.updateMatrix();mesh.updateMatrixWorld(true);}
     });partTexture.needsUpdate=true;selectionTexture.needsUpdate=true;markerGeometry.attributes.position.needsUpdate=true;lastState=s;lastExtent=amount;dirty=true;
    }
-   if(s.view!==lastView||s.reset!==lastReset){fit(s.view,amount);lastView=s.view;lastReset=s.reset;}
+   if(s.view!==lastView||s.reset!==lastReset){flight=null;fit(s.view,amount);lastView=s.view;lastReset=s.reset;}
+   if((s.theme??'light')!==lastTheme){lastTheme=s.theme??'light';applyTheme(lastTheme as 'light'|'dark');}
+   if(s.zoom&&s.zoom.id!==lastZoom){lastZoom=s.zoom.id;const offset=camera.position.clone().sub(controls.target),length=T.MathUtils.clamp(offset.length()*s.zoom.factor,controls.minDistance,controls.maxDistance);flyTo(controls.target.clone().add(offset.setLength(length)),controls.target.clone());}
+   if(s.focus&&s.focus!==lastFocus){lastFocus=s.focus;const box=new T.Box3();atlas.parts.forEach((p,i)=>{if(s.selected.includes(p.id)&&data[i*4+3]>.5)box.union(bounds[i].clone().translate(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])));});if(!box.isEmpty()){
+    // Fit the structure into the part of the screen that panels do not cover, then shift the camera so it sits in the middle of that area.
+    const w=el.clientWidth,h=el.clientHeight,mobile=w<768,sheet=s.inspectorOpen?document.querySelector('.detail-sheet')?.getBoundingClientRect():undefined,header=document.querySelector('.identity')?.getBoundingClientRect();
+    let left=mobile?12:w>1100?300:30,right=w-(mobile?12:90),top=(header?.bottom??90)+12,bottom=h-(mobile?140:180);
+    if(sheet){if(mobile||w<=h)bottom=Math.min(bottom,sheet.top-12);else right=Math.min(right,sheet.left-16);}
+    const freeW=Math.max(120,right-left),freeH=Math.max(120,bottom-top),tan=Math.tan(T.MathUtils.degToRad(camera.fov/2));
+    const center=box.getCenter(new T.Vector3()),radius=Math.max(box.getSize(new T.Vector3()).length()/2,.03);
+    const distance=Math.max(radius/tan*(h/freeH),radius/(tan*camera.aspect)*(w/freeW))*1.1;
+    const direction=camera.position.clone().sub(controls.target).normalize(),worldPerPx=2*distance*tan/h;
+    const upAxis=camera.up.clone().projectOnPlane(direction).normalize(),rightAxis=new T.Vector3().crossVectors(direction,upAxis).normalize().negate();
+    const shift=rightAxis.multiplyScalar(-((left+right)/2-w/2)*worldPerPx).add(upAxis.multiplyScalar(((top+bottom)/2-h/2)*worldPerPx));
+    const target=center.clone().add(shift);flyTo(target.clone().addScaledVector(direction,distance),target);}}
+   if(flight){flight.t=Math.min(1,flight.t+dt/.55);const k=1-Math.pow(1-flight.t,3);camera.position.lerpVectors(flight.from,flight.to,k);controls.target.lerpVectors(flight.fromTarget,flight.toTarget,k);dirty=true;if(flight.t>=1)flight=null;}
    if(moving&&!s.isolate)fit(amount>.5?'front':s.view,Math.max(0,(amount-.3)/.7));
    const isolateKey=s.isolate?s.selected.join(',')+':'+s.reset+':'+s.inspectorOpen+':'+camera.aspect:'';
    if(isolateKey!==lastIsolate||(s.isolate&&moving)){
@@ -123,7 +142,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
     }else if(lastIsolate){camera.clearViewOffset();fit(s.view,amount);}
     lastIsolate=isolateKey;
    }
-   controls.enableRotate=amount<.8;controls.mouseButtons.LEFT=amount<.8?T.MOUSE.ROTATE:T.MOUSE.PAN;controls.touches.ONE=amount<.8?T.TOUCH.ROTATE:T.TOUCH.PAN;ground.visible=platform.visible=ring.visible=innerRing.visible=amount<.5&&!s.isolate;markers.visible=amount>.75;controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;controls.autoRotateSpeed=.65;controls.update();if(controls.autoRotate)dirty=true;
+   controls.enableRotate=amount<.8;controls.mouseButtons.LEFT=amount<.8?T.MOUSE.ROTATE:T.MOUSE.PAN;controls.touches.ONE=amount<.8?T.TOUCH.ROTATE:T.TOUCH.PAN;platform.visible=ring.visible=innerRing.visible=amount<.5&&!s.isolate;ground.visible=platform.visible&&s.theme!=='dark';markers.visible=amount>.75;controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;controls.autoRotateSpeed=.65;controls.update();if(controls.autoRotate)dirty=true;
    if(dirty){renderer.render(scene,camera);targets=[];if(amount>.45){const hasSolid=atlas.parts.some((p,i)=>p.system!=='integumentary'&&data[i*4+3]>.5);atlas.parts.forEach((p,i)=>{if(data[i*4+3]<.5||(hasSolid&&p.system==='integumentary'))return;let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;for(let corner=0;corner<8;corner++){projected.set(p.bounds[(corner&1)?1:0][0]+data[i*4],p.bounds[(corner&2)?1:0][1]+data[i*4+1],p.bounds[(corner&4)?1:0][2]+data[i*4+2]).project(camera);const x=(projected.x+1)*el.clientWidth/2,y=(1-projected.y)*el.clientHeight/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}projected.copy(centers[i]).add(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])).project(camera);if(projected.z< -1||projected.z>1)return;targets.push({index:i,x:(projected.x+1)*el.clientWidth/2,y:(1-projected.y)*el.clientHeight/2,left,right,top,bottom});});}dirty=false;}
 
   };animate();

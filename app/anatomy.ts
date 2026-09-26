@@ -16,11 +16,13 @@ export const SYSTEMS: {id:SystemId;name:string;color:string;description:string}[
  {id:'integumentary',name:'Поверхня тіла',color:'#ba9b7d',description:'Поверхня тіла слугує зовнішнім анатомічним орієнтиром. Покривна система утворює захисний бар\'єр і бере участь у чутливості та терморегуляції.'},
  {id:'connective',name:'Сполучна тканина',color:'#aec3bb',description:'Хрящі, зв\'язки та інші сполучні тканини підтримують, з\'єднують і розмежовують структури. Вони стабілізують суглоби й розподіляють механічне навантаження.'},
 ];
-export interface Part {id:string;name:string;nameEn?:string;conceptId:string;system:SystemId;chunk:number;positions:number;normals:number;indices:number;vertexCount:number;indexCount:number;bounds:[number[],number[]]}
-export interface Concept {id:string;name:string;nameEn?:string;elements:string[]}
+export interface Part {id:string;name:string;nameEn?:string;nameLa?:string;conceptId:string;system:SystemId;chunk:number;positions:number;normals:number;indices:number;vertexCount:number;indexCount:number;bounds:[number[],number[]]}
+export interface Concept {id:string;name:string;nameEn?:string;nameLa?:string;elements:string[]}
 export interface Atlas {version:string;sex?:'male';source?:string;scope?:string;parts:Part[];concepts:Concept[];chunks:{url:string;bytes:number;gzip?:string;gzipBytes?:number}[];triangles:number}
 export type View = 'three-quarter'|'front'|'back'|'side';
-export interface SceneState {inspectorOpen?:boolean;explode:number;visible:SystemId[];selected:string[];isolate:boolean;view:View;rotate:boolean;reset:number}
+export type Theme='light'|'dark';
+/** zoom and focus are commands: each new id applies the zoom factor or flies the camera to the selection once. */
+export interface SceneState {inspectorOpen?:boolean;explode:number;visible:SystemId[];selected:string[];isolate:boolean;view:View;rotate:boolean;reset:number;theme?:Theme;zoom?:{id:number;factor:number};focus?:number}
 export const DEFAULT_VISIBLE:SystemId[] = ['cardiac','sensory','skeletal','muscular','arterial','venous','nervous','respiratory','digestive','urinary','lymphatic','endocrine','reproductive','connective'];
 export const EXPLANATIONS:Record<string,string> = {
  'heart':'М\'язовий насос у грудній клітці. Права половина серця спрямовує кров до легень, ліва — у велике коло кровообігу.',
@@ -34,8 +36,9 @@ export const EXPLANATIONS:Record<string,string> = {
  'diaphragm':'Широкий м\'яз, що відокремлює грудну порожнину від черевної. Під час скорочення збільшує об\'єм грудної клітки й допомагає втягувати повітря в легені.',
 };
 export function explanation(nameEn:string,system:SystemId){return EXPLANATIONS[nameEn.toLowerCase()] ?? SYSTEMS.find(s=>s.id===system)?.description ?? '';}
-/** Replaces English BodyParts3D names with Ukrainian ones and keeps the originals in nameEn for search and explanations. */
-export function localizeAtlas(atlas:Atlas,names:Record<string,string>):Atlas{
- const uk=(name:string)=>{const t=names[name.toLowerCase()];return t?t.charAt(0).toLocaleUpperCase('uk')+t.slice(1):name;};
- return {...atlas,parts:atlas.parts.map(p=>({...p,nameEn:p.name,name:uk(p.name)})),concepts:atlas.concepts.map(c=>({...c,nameEn:c.name,name:uk(c.name)}))};
+/** Replaces English BodyParts3D names with Ukrainian ones, adds Latin names, and keeps the originals in nameEn for search and explanations. */
+export function localizeAtlas(atlas:Atlas,uk:Record<string,string>,la:Record<string,string>):Atlas{
+ const lookup=(names:Record<string,string>,name:string)=>{const t=names[name.toLowerCase()];return t?t.charAt(0).toLocaleUpperCase('uk')+t.slice(1):undefined;};
+ const names=(name:string)=>({nameEn:name,name:lookup(uk,name)??name,nameLa:lookup(la,name)});
+ return {...atlas,parts:atlas.parts.map(p=>({...p,...names(p.name)})),concepts:atlas.concepts.map(c=>({...c,...names(c.name)}))};
 }
