@@ -1,11 +1,13 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type ReactNode} from 'react';
-import {Activity,ArrowLeft,ArrowUpRight,BookOpen,Camera,ChevronRight,CircleHelp,Eye,EyeOff,Focus,Ghost,History,Info,LocateFixed,Maximize,Mars,Menu,Moon,MousePointerClick,NotebookPen,Pause,Plus,RotateCcw,RotateCw,ScanLine,Scissors,Search,SlidersHorizontal,Sun,Tags,Trash2,Venus,X,ZoomIn,ZoomOut} from 'lucide-react';
+import {Activity,ArrowLeft,ArrowUpRight,BookOpen,Camera,ChevronRight,CircleHelp,Eye,EyeOff,Focus,Ghost,History,Info,LocateFixed,Maximize,Mars,Menu,MessageSquareHeart,Copy,Check,Moon,MousePointerClick,NotebookPen,Pause,Plus,RotateCcw,RotateCw,ScanLine,Scissors,Search,SlidersHorizontal,Sun,Tags,Trash2,Venus,X,ZoomIn,ZoomOut} from 'lucide-react';
 import {Slider} from '@/components/ui/slider';
 import {Switch} from '@/components/ui/switch';
 import {Sheet,SheetContent,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import AnatomyScene,{type ScanReport} from './scene';
+import Intro from './intro';
+import {AUTHOR,AUTHOR_LINKS,BrandIcon,feedbackMailto} from './author';
 import {buildIndex,highlight,searchConcepts,tokenize,type QueryToken} from './search';
 import {DEFAULT_VISIBLE,SYSTEMS,EXPLANATIONS,explanation,localizeAtlas,type Atlas,type Concept,type Insets,type LabelMode,type SceneState,type SectionAxis,type SystemId,type Theme,type View} from './anatomy';
 
@@ -42,7 +44,11 @@ export default function Home(){
  const [chosen,setChosen]=useState<Concept|null>(null),[history,setHistory]=useState<Concept[]>([]);
  const [theme,setTheme]=useState<Theme>(storedTheme),[zoom,setZoom]=useState({id:0,factor:1}),[focus,setFocus]=useState(0),[snapshot,setSnapshot]=useState(0);
  const [scan,setScan]=useState<ScanReport>({position:0,crossing:[]}),[notes,setNotes]=useState<Record<string,Note>>(()=>read('atlas-notes',{})),[visits,setVisits]=useState<Visit[]>(()=>read('atlas-visits',[])),[showCoverage,setShowCoverage]=useState(false),[toast,setToast]=useState('');
- const [guide,setGuide]=useState<number|null>(()=>read('atlas-guide-seen',false)?null:0);
+ // The intro shows once per browser session; the step-by-step guide follows it on the first ever visit.
+ const [intro,setIntro]=useState(()=>{try{return sessionStorage.getItem('atlas-intro-seen')!=='1';}catch{return true;}});
+ const [guide,setGuide]=useState<number|null>(()=>{let introSeen=false;try{introSeen=sessionStorage.getItem('atlas-intro-seen')==='1';}catch{/* storage may be blocked */}return introSeen&&!read('atlas-guide-seen',false)?0:null;});
+ const closeIntro=()=>{setIntro(false);try{sessionStorage.setItem('atlas-intro-seen','1');}catch{/* storage may be blocked */}if(!read('atlas-guide-seen',false))setGuide(0);};
+ const [feedback,setFeedback]=useState(false),[fbKind,setFbKind]=useState('Ідея'),[fbText,setFbText]=useState(''),[fbName,setFbName]=useState(''),[fbContact,setFbContact]=useState(''),[copied,setCopied]=useState(false);
  const openSearch=()=>{setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),60);};
  const closeGuide=()=>{setGuide(null);write('atlas-guide-seen',true);};
  const searchInput=useRef<HTMLInputElement>(null),[searchFocused,setSearchFocused]=useState(false);
@@ -99,8 +105,8 @@ export default function Home(){
  const keys=useRef<(e:KeyboardEvent)=>void>(()=>{});
  keys.current=(e:KeyboardEvent)=>{
   const typing=e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement;
-  if(e.key==='Escape'){if(typing){(e.target as HTMLElement).blur();return;}if(guide!==null){closeGuide();return;}if(help){setHelp(false);return;}if(drawer&&!wide){setDrawer(false);return;}if(state.isolate){patch({isolate:false});return;}clear();return;}
-  if(typing||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.key==='Escape'){if(typing){(e.target as HTMLElement).blur();return;}if(feedback){setFeedback(false);return;}if(intro)return;if(guide!==null){closeGuide();return;}if(help){setHelp(false);return;}if(drawer&&!wide){setDrawer(false);return;}if(state.isolate){patch({isolate:false});return;}clear();return;}
+  if(typing||e.ctrlKey||e.metaKey||e.altKey||intro||feedback)return;
   if(e.key==='/'){e.preventDefault();setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),30);return;}
   if(e.key==='+'||e.key==='='){zoomBy(.75);return;}if(e.key==='-'||e.key==='_'){zoomBy(1/.75);return;}if(e.key==='?'){setHelp(h=>!h);return;}
   const view=VIEWS.find(v=>v.key===e.key);if(view){setView(view.id);return;}
@@ -128,7 +134,7 @@ export default function Home(){
   {/* Sidebar */}
   {!wide&&drawer&&<div className="scrim" onClick={()=>setDrawer(false)}/>}
   <aside className={`sidebar ${sidebarOpen?'open':''}`} aria-label="Панель атласу">
-   <div className="brand"><div className="brand-mark" aria-hidden="true"><span/></div><div><strong>Атлас людини <em>3D</em></strong><small>{atlas?atlas.parts.length.toLocaleString('uk'):'…'} структур · українською й латиною</small></div>{!wide&&<button className="icon-btn" onClick={()=>setDrawer(false)} aria-label="Закрити меню"><X size={20}/></button>}</div>
+   <div className="brand"><button className="brand-mark" onClick={()=>setIntro(true)} aria-label="Показати вступ" title="Про атлас"><span/></button><div><strong>Атлас людини <em>3D</em></strong><small>{atlas?atlas.parts.length.toLocaleString('uk'):'…'} структур · українською й латиною</small></div>{!wide&&<button className="icon-btn" onClick={()=>setDrawer(false)} aria-label="Закрити меню"><X size={20}/></button>}</div>
    <nav className="tabs" role="tablist"><button role="tab" aria-selected={tab==='atlas'} onClick={()=>setTab('atlas')}><Search size={16}/>Атлас</button><button role="tab" aria-selected={tab==='study'} onClick={()=>setTab('study')}><BookOpen size={16}/>Навчання{Object.keys(notes).length>0&&<b>{Object.keys(notes).length}</b>}</button></nav>
    <div className="side-scroll">
    {tab==='atlas'?<>
@@ -180,6 +186,7 @@ export default function Home(){
     </Section>
    </>}
    </div>
+   <div className="side-author"><div className="avatar" aria-hidden="true">{AUTHOR.name.split(' ').map(w=>w[0]).join('')}</div><div className="who"><small>Автор</small><b>{AUTHOR.name}</b></div><div className="socials">{AUTHOR_LINKS.map(l=><a key={l.id} href={l.url} target="_blank" rel="noreferrer" aria-label={l.label} title={l.label}><BrandIcon id={l.id} size={17}/></a>)}<button onClick={()=>setFeedback(true)} aria-label="Надіслати відгук" title="Надіслати відгук"><MessageSquareHeart size={17}/></button></div></div>
    <p className="side-note">{model==="female"?"Жіноча модель: HRA / HuBMAP, CC BY 4.0. ":""}Навчальний ресурс, не для діагностики чи лікування.</p>
    <footer className="side-foot">{!wide&&<button onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}{theme==='dark'?'Світла тема':'Темна тема'}</button>}<button onClick={()=>{setDrawer(false);setGuide(0);}}><CircleHelp size={15}/>Довідка</button><button onClick={()=>setAbout(true)}><Info size={15}/>Джерела</button></footer>
   </aside>
@@ -193,7 +200,8 @@ export default function Home(){
    </div>
    <div className="top-actions">
     {wide&&<button className="icon-btn raised" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} aria-label={theme==='dark'?'Світла тема':'Темна тема'} title={theme==='dark'?'Світла тема':'Темна тема'}>{theme==='dark'?<Sun size={20}/>:<Moon size={20}/>}</button>}
-    <button className="icon-btn raised" onClick={()=>setGuide(0)} aria-label="Як користуватися" title="Як користуватися"><CircleHelp size={20}/></button>
+    <button className="feedback-btn raised" onClick={()=>setFeedback(true)} aria-label="Надіслати відгук" title="Надіслати відгук"><MessageSquareHeart size={19}/><span>Відгук</span></button>
+    {wide&&<button className="icon-btn raised" onClick={()=>setGuide(0)} aria-label="Як користуватися" title="Як користуватися"><CircleHelp size={20}/></button>}
    </div>
   </div>
 
@@ -258,7 +266,7 @@ export default function Home(){
   </aside>}
 
   {toast&&<div className="toast glass" role="status">{toast}</div>}
-  {progress<100&&!error&&<div className="loading glass" role="status"><div className="spinner"/><div><strong>Готуємо анатомічну модель</strong><span>{progress}% · {atlas?.parts.length.toLocaleString('uk')??'…'} структур</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
+  {progress<100&&!error&&!intro&&<div className="loading glass" role="status"><div className="spinner"/><div><strong>Готуємо анатомічну модель</strong><span>{progress}% · {atlas?.parts.length.toLocaleString('uk')??'…'} структур</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
   {error&&<div className="loading glass error" role="alert"><p>{error}</p><button className="btn" onClick={()=>location.reload()}>Перезавантажити</button></div>}
 
   {guide!==null&&(()=>{const steps=[
@@ -274,6 +282,16 @@ export default function Home(){
    <div className="guide-nav">{guide>0?<button className="btn" onClick={()=>setGuide(guide-1)}>Назад</button>:<button className="btn" onClick={closeGuide}>Пропустити</button>}{guide<steps.length-1?<button className="btn primary" onClick={()=>setGuide(guide+1)}>Далі</button>:<button className="btn primary" onClick={closeGuide}>Почати</button>}</div>
    {wide&&<button className="link guide-keys" onClick={()=>{closeGuide();setHelp(true);}}>Клавіатурні скорочення</button>}
   </div></div>;})()}
+  {feedback&&<div className="modal-scrim" onClick={()=>setFeedback(false)}><form className="feedback glass" role="dialog" aria-label="Відгук" onClick={e=>e.stopPropagation()} onSubmit={e=>{e.preventDefault();if(!fbText.trim())return;location.href=feedbackMailto({kind:fbKind,message:fbText,name:fbName,contact:fbContact,context:`${model==='female'?'жіноча':'чоловіча'} модель${chosen?`, структура «${chosen.name}»`:''}, ${navigator.userAgent.includes('Mobile')?'телефон':'комп\'ютер'}`});setToast('Відкрито лист у поштовому застосунку. Дякую!');setFeedback(false);setFbText('');}}>
+   <header><div><h2>Надіслати відгук</h2><p>Ідеї, помилки в назвах чи просто враження. Відгук отримає {AUTHOR.name}.</p></div><button type="button" className="icon-btn" onClick={()=>setFeedback(false)} aria-label="Закрити"><X size={20}/></button></header>
+   <Segmented<string> label="Тип відгуку" value={fbKind} onChange={setFbKind} options={['Ідея','Помилка','Подяка','Інше'].map(x=>({id:x,label:x}))}/>
+   <label className="field"><span>Повідомлення</span><textarea required rows={5} value={fbText} onChange={e=>setFbText(e.target.value)} placeholder={fbKind==='Помилка'?'Що сталося і де саме? Наприклад: неправильна назва структури…':'Напишіть, що думаєте…'} autoFocus/></label>
+   <div className="field-row"><label className="field"><span>Ім'я (необов'язково)</span><input value={fbName} onChange={e=>setFbName(e.target.value)}/></label><label className="field"><span>Контакт для відповіді</span><input value={fbContact} onChange={e=>setFbContact(e.target.value)} placeholder="пошта або @нік"/></label></div>
+   <button className="btn primary wide" type="submit" disabled={!fbText.trim()}><MessageSquareHeart size={18}/>Надіслати через пошту</button>
+   <p className="fb-alt">Не відкривається пошта? Напишіть на <b>{AUTHOR.email}</b> <button type="button" className="link" onClick={()=>{navigator.clipboard?.writeText(AUTHOR.email).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1600);}).catch(()=>{});}}>{copied?<><Check size={14}/>Скопійовано</>:<><Copy size={14}/>Копіювати</>}</button></p>
+   {AUTHOR_LINKS.length>0&&<div className="fb-socials">{AUTHOR_LINKS.map(l=><a key={l.id} href={l.url} target="_blank" rel="noreferrer"><BrandIcon id={l.id} size={17}/>{l.label}</a>)}</div>}
+  </form></div>}
+  {intro&&<Intro progress={error?0:progress} onEnter={closeIntro} onFeedback={()=>setFeedback(true)}/>}
   {help&&<div className="modal-scrim" onClick={()=>setHelp(false)}><div className="help glass" role="dialog" aria-label="Клавіші" onClick={e=>e.stopPropagation()}><header><h2>Керування</h2><button className="icon-btn" onClick={()=>setHelp(false)} aria-label="Закрити"><X size={20}/></button></header>
    <p className="hint">Мишею: перетягування обертає, права кнопка зсуває, колесо масштабує в точку під курсором. На телефоні: один палець обертає, два масштабують.</p>
    <dl>{SHORTCUTS.map(([k,v])=><div key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></div>)}</dl></div></div>}

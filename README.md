@@ -6,6 +6,12 @@
 
 Проєкт є українською адаптацією [ashemag/human-atlas](https://github.com/ashemag/human-atlas).
 
+## Автор
+
+Створено **Maksym Valin** · [GitHub](https://github.com/maks21787-jpg) · maks21787@gmail.com
+
+Відгуки надходять на пошту автора через форму «Відгук» в атласі. Ім'я, пошту й посилання на соцмережі змінюють в одному файлі `app/author.tsx`: щоб показати Instagram, Telegram, LinkedIn, TikTok, YouTube чи Facebook, достатньо вписати посилання в поле `url` відповідного рядка. Порожні рядки не показуються.
+
 ## Моделі
 
 - **Чоловік · тіло** — BodyParts3D 4.0 (DBCLS, CC BY 4.0): 2 234 елементи, 3 432 названі поняття, повне тіло.
