@@ -19,10 +19,22 @@ export const SYSTEMS: {id:SystemId;name:string;color:string;description:string}[
 export interface Part {id:string;name:string;nameEn?:string;nameLa?:string;conceptId:string;system:SystemId;chunk:number;positions:number;normals:number;indices:number;vertexCount:number;indexCount:number;bounds:[number[],number[]]}
 export interface Concept {id:string;name:string;nameEn?:string;nameLa?:string;elements:string[]}
 export interface Atlas {version:string;sex?:'male';source?:string;scope?:string;parts:Part[];concepts:Concept[];chunks:{url:string;bytes:number;gzip?:string;gzipBytes?:number}[];triangles:number}
-export type View = 'three-quarter'|'front'|'back'|'side';
+/** Camera presets. 'left' looks at the patient's left side (+x), 'right' at the right side (-x). */
+export type View = 'three-quarter'|'front'|'back'|'left'|'right'|'top';
+export type SectionAxis = 'axial'|'coronal'|'sagittal';
+export type LabelMode = 'uk'|'la'|null;
+/** Screen space, in CSS pixels, that panels cover on each side of the 3D view. */
+export interface Insets {left:number;right:number;top:number;bottom:number}
 export type Theme='light'|'dark';
-/** zoom and focus are commands: each new id applies the zoom factor or flies the camera to the selection once. */
-export interface SceneState {inspectorOpen?:boolean;explode:number;visible:SystemId[];selected:string[];isolate:boolean;view:View;rotate:boolean;reset:number;theme?:Theme;zoom?:{id:number;factor:number};focus?:number}
+/** zoom, focus and snapshot are commands: each new id is applied once. */
+export interface SceneState {
+ inspectorOpen?:boolean;explode:number;visible:SystemId[];selected:string[];isolate:boolean;view:View;rotate:boolean;reset:number;
+ theme?:Theme;zoom?:{id:number;factor:number};focus?:number;snapshot?:number;
+ hidden?:string[];xray?:SystemId[];glass?:boolean;labels?:LabelMode;
+ section?:{axis:SectionAxis;position:number}|null;
+ scan?:{on:boolean;hold:boolean;position:number};
+ coverage?:Record<string,number>|null;insets?:Insets;
+}
 export const DEFAULT_VISIBLE:SystemId[] = ['cardiac','sensory','skeletal','muscular','arterial','venous','nervous','respiratory','digestive','urinary','lymphatic','endocrine','reproductive','connective'];
 export const EXPLANATIONS:Record<string,string> = {
  'heart':'М\'язовий насос у грудній клітці. Права половина серця спрямовує кров до легень, ліва — у велике коло кровообігу.',
