@@ -30,6 +30,8 @@ export type Theme='light'|'dark';
 export interface SceneState {
  inspectorOpen?:boolean;explode:number;visible:SystemId[];selected:string[];isolate:boolean;view:View;rotate:boolean;reset:number;
  theme?:Theme;zoom?:{id:number;factor:number};focus?:number;snapshot?:number;
+ /** Auto-rotation speed; the intro spins the body faster than the atlas does. */
+ spin?:number;
  hidden?:string[];xray?:SystemId[];glass?:boolean;labels?:LabelMode;
  section?:{axis:SectionAxis;position:number}|null;
  scan?:{on:boolean;hold:boolean;position:number};

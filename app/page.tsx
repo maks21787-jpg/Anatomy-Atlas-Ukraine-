@@ -1,12 +1,12 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type ReactNode} from 'react';
-import {Activity,ArrowLeft,ArrowUpRight,BookOpen,Camera,ChevronRight,CircleHelp,Eye,EyeOff,Focus,Ghost,History,Info,LocateFixed,Maximize,Mars,Menu,MessageSquareHeart,Copy,Check,Moon,MousePointerClick,NotebookPen,Pause,Plus,RotateCcw,RotateCw,ScanLine,Scissors,Search,SlidersHorizontal,Sun,Tags,Trash2,Venus,X,ZoomIn,ZoomOut} from 'lucide-react';
+import {Activity,ArrowLeft,ArrowUpRight,BookOpen,Camera,ChevronRight,CircleHelp,Eye,EyeOff,Focus,Ghost,History,Info,Lightbulb,LocateFixed,Maximize,Mars,Menu,MessageSquareHeart,Copy,Check,Moon,MousePointerClick,NotebookPen,Pause,Plus,RotateCcw,RotateCw,ScanLine,Scissors,Search,SlidersHorizontal,Sun,Tags,Trash2,Venus,X,ZoomIn,ZoomOut} from 'lucide-react';
 import {Slider} from '@/components/ui/slider';
 import {Switch} from '@/components/ui/switch';
 import {Sheet,SheetContent,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import AnatomyScene,{type ScanReport} from './scene';
-import Intro from './intro';
+import Intro,{type Chapter} from './intro';
 import Tour from './tour';
 import {AUTHOR,AUTHOR_LINKS,BrandIcon,feedbackMailto} from './author';
 import {buildIndex,highlight,searchConcepts,tokenize,type QueryToken} from './search';
@@ -22,6 +22,21 @@ const MODELS:{id:Model;label:string;dir:string;popular:string[]}[]=[
  {id:'male',label:'Чоловік · тіло',dir:'models/',popular:['heart','brain','liver','stomach','spleen','pancreas','kidney','lung','urinary bladder','trachea','femur','skull']},
  {id:'female',label:'Жінка · тулуб',dir:'models/female/',popular:['uterus','ovary','uterine tube','breast','vagina','kidney','liver','pancreas','spleen','urinary bladder','hip bone','vertebral column']},
 ];
+/** Intro chapters: each one adds a layer of systems to the turning body. */
+const LAYERS:{title:string;systems:SystemId[];text:Record<Model,string>}[]=[
+ {title:'Скелет',systems:['skeletal','connective'],text:{male:'Кістки, хрящі та зв\'язки. Клацніть будь-яку кістку, щоб побачити її назву українською та латиною.',female:'Хребет і кістки таза: опора тулуба й захист органів малого таза.'}},
+ {title:'Серце й судини',systems:['cardiac','arterial','venous'],text:{male:'Серце, артерії та вени: кровоносне русло від аорти до найдрібніших гілок.',female:'Аорта, порожнисті вени та їхні гілки до органів черевної порожнини й таза.'}},
+ {title:'Органи й нерви',systems:['nervous','sensory','respiratory','digestive','urinary','endocrine','lymphatic','reproductive'],text:{male:'Мозок і нерви, легені, травні й сечові органи. Кожен можна ізолювати, розрізати й підписати.',female:'Матка, яєчники, маткові труби, нирки, печінка, кишечник і молочні залози.'}},
+ {title:'М\'язи',systems:['muscular'],text:{male:'Понад 400 м\'язів поверх скелета. «Скляне тіло» й «Рентген» дозволяють заглянути під них.',female:''}},
+];
+const TIPS:Record<string,string>={
+ select:'Ctrl + клік додає ще структури до вибору, а «Ізолювати» (I) лишає на екрані тільки вибране.',
+ glass:'У «Скляному тілі» вибране лишається непрозорим. Оберіть орган, і його буде видно крізь тіло.',
+ section:'Тягніть повзунок, щоб рухати площину зрізу. Площину можна змінити: поперечна, фронтальна, сагітальна.',
+ scan:'Клацніть назву в списку сканера, щоб відкрити цю структуру.',
+ female:'Жіноча модель — тулуб: хребет, таз, органи черевної порожнини й малого таза, судини, молочні залози.',
+ labels:'Підписи з\'являються біля вибраних структур. Мову (українська чи латина) змінюють у меню «Вигляд».',
+};
 const PAGE=60;
 const SHORTCUTS:[string,string][]=[['/','Пошук'],['Esc','Скасувати вибір, закрити панель'],['Ctrl + клік','Вибрати кілька структур'],['I','Ізолювати вибране'],['H','Сховати вибране'],['U','Показати приховане'],['F','Наблизити до вибраного'],['+ / −','Масштаб'],['0','Вписати тіло в екран'],['1–5','Спереду, ззаду, зліва, справа, згори'],['L','Підписи'],['G','Скляне тіло'],['S','Сканер']];
 function plural(n:number,one:string,few:string,many:string){const m10=n%10,m100=n%100;return m10===1&&m100!==11?one:m10>=2&&m10<=4&&(m100<12||m100>14)?few:many;}
@@ -49,10 +64,12 @@ export default function Home(){
  // The animated intro opens on every visit; the spotlight tour follows it until the reader has finished it once.
  const [intro,setIntro]=useState(()=>!new URLSearchParams(location.search).has('nointro'));
  const [guide,setGuide]=useState<number|null>(()=>new URLSearchParams(location.search).has('nointro')&&!read('atlas-tour-done',false)?0:null);
- const closeIntro=()=>{setIntro(false);if(!read('atlas-tour-done',false))setTimeout(()=>setGuide(0),700);};
+ const [entering,setEntering]=useState(false),[tip,setTip]=useState<string|null>(null),[tourModel,setTourModel]=useState<Model>('male');
+ const closeIntro=()=>{setIntro(false);setState(s=>({...initial,labels:s.labels,reset:s.reset+1}));setEntering(true);setTimeout(()=>setEntering(false),1600);if(!read('atlas-tour-done',false))setTimeout(()=>setGuide(0),1100);};
  const [feedback,setFeedback]=useState(false),[fbKind,setFbKind]=useState('Ідея'),[fbText,setFbText]=useState(''),[fbName,setFbName]=useState(''),[fbContact,setFbContact]=useState(''),[copied,setCopied]=useState(false);
  const openSearch=()=>{setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),60);};
  const closeGuide=()=>{setGuide(null);write('atlas-tour-done',true);};
+ const startGuide=()=>{setDrawer(false);setHelp(false);setGuide(0);};
  const searchInput=useRef<HTMLInputElement>(null),[searchFocused,setSearchFocused]=useState(false);
 
  const modelInfo=MODELS.find(m=>m.id===model)!;
@@ -60,6 +77,9 @@ export default function Home(){
   Promise.all([load(dir+'atlas.json'),load(dir+'names-uk.json'),load(dir+'names-la.json')]).then(([data,uk,la])=>setAtlas(localizeAtlas(data as Atlas,uk as Record<string,string>,la as Record<string,string>))).catch(e=>{if(e.name!=='AbortError')setError(e.message);});return()=>abort.abort();},[model]);
  useEffect(()=>{document.documentElement.dataset.theme=theme;document.querySelector('meta[name=theme-color]')?.setAttribute('content',theme==='dark'?'#0b1016':'#eef1f3');write('atlas-theme-v2',theme);},[theme]);
  useEffect(()=>write('atlas-notes',notes),[notes]);useEffect(()=>write('atlas-visits',visits),[visits]);
+ // A cached copy of the page reloads itself once when a newer build has been published.
+ useEffect(()=>{fetch('version.json',{cache:'no-store'}).then(r=>r.ok?r.json() as Promise<{build?:string}>:null).then(v=>{if(!v?.build||v.build===__BUILD__)return;try{if(sessionStorage.getItem('atlas-reloaded')===v.build)return;sessionStorage.setItem('atlas-reloaded',v.build);}catch{return;}location.reload();}).catch(()=>{});},[]);
+ useEffect(()=>{if(!tip)return;const t=setTimeout(()=>setTip(null),7000);return()=>clearTimeout(t);},[tip]);
  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),2200);return()=>clearTimeout(t);},[toast]);
 
  const parts=useMemo(()=>new Map(atlas?.parts.map(p=>[p.id,p])),[atlas]);
@@ -79,7 +99,26 @@ export default function Home(){
  const parents=useMemo(()=>{if(!chosen||!state.selected.length)return[];const first=conceptsByPart.get(state.selected[0])??[];return first.filter(c=>c.id!==chosen.id&&c.elements.length>state.selected.length&&state.selected.every(id=>c.elements.includes(id))).sort((a,b)=>a.elements.length-b.elements.length).slice(0,6);},[chosen,state.selected,conceptsByPart]);
  const coverage=useMemo(()=>{if(!showCoverage||!atlas)return null;const score:Record<string,number>={};const add=(c:Concept|undefined,w:number)=>c?.elements.forEach(id=>{score[id]=(score[id]??0)+w;});visits.forEach(v=>add(conceptById.get(v.id),1));Object.keys(notes).forEach(id=>add(conceptById.get(id),3));const max=Math.max(1,...Object.values(score));for(const k in score)score[k]=.3+.7*score[k]/max;return score;},[showCoverage,atlas,visits,notes,conceptById]);
 
- const insets:Insets=useMemo(()=>wide?{left:(drawer||wide)?356:0,right:details&&selectedParts.length?430:12,top:64,bottom:96}:{left:0,right:0,top:84,bottom:details&&selectedParts.length?Math.round(innerHeight*.5):150},[wide,drawer,details,selectedParts.length]);
+ const chapters=useMemo(()=>{const out:(Chapter&{visible:SystemId[]})[]=[];let visible:SystemId[]=[];for(const layer of LAYERS){const present=layer.systems.filter(id=>counts[id]>0);if(!present.length||!layer.text[model])continue;visible=[...visible,...present];out.push({title:layer.title,text:layer.text[model],count:present.reduce((a,id)=>a+counts[id],0),color:SYSTEMS.find(x=>x.id===present[0])!.color,visible});}return out;},[counts,model]);
+ /** The intro shows one more layer of the body per chapter while the camera circles it. */
+ const onChapter=(i:number)=>{const visible=i===0?[]:i>chapters.length?DEFAULT_VISIBLE:chapters[i-1].visible;setState(s=>({...s,visible,selected:[],isolate:false,hidden:[],xray:[],glass:false,explode:0,section:null,scan:{on:false,hold:false,position:0},rotate:true,spin:2.4}));};
+ const showTip=(key:string)=>{if(intro||guide!==null)return;const seen=read<string[]>('atlas-tips',[]);if(seen.includes(key))return;write('atlas-tips',[...seen,key]);setTip(TIPS[key]);};
+ useEffect(()=>{if(state.selected.length)showTip('select');// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[state.selected.length>0]);
+ useEffect(()=>{if(state.glass)showTip('glass');// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[state.glass]);
+ useEffect(()=>{if(state.section)showTip('section');// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[!!state.section]);
+ useEffect(()=>{if(state.scan?.on)showTip('scan');// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[state.scan?.on]);
+ useEffect(()=>{if(model==='female'&&atlas)showTip('female');// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[model,atlas]);
+ // The tour starts from a clean view and remembers the model, so switching it can count as done.
+ useEffect(()=>{if(guide===0){setTourModel(model);clear();}// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[guide===0]);
+ useEffect(()=>{if(!wide&&guide!==null&&guide>6)setDrawer(false);},[guide,wide]);
+
+ const insets:Insets=useMemo(()=>intro?(wide?{left:Math.min(600,Math.round(innerWidth*.46)),right:24,top:80,bottom:110}:{left:0,right:0,top:70,bottom:Math.round(innerHeight*.5)}):wide?{left:(drawer||wide)?356:0,right:details&&selectedParts.length?430:12,top:64,bottom:96}:{left:0,right:0,top:84,bottom:details&&selectedParts.length?Math.round(innerHeight*.5):150},[intro,wide,drawer,details,selectedParts.length]);
  const zoomBy=(factor:number)=>setZoom(z=>({id:z.id+1,factor}));
  const patch=useCallback((p:Partial<SceneState>)=>setState(s=>({...s,...p})),[]);
 
@@ -130,7 +169,7 @@ export default function Home(){
  const crossingNames=scan.crossing.slice(0,6).map(id=>parts.get(id)).filter(p=>!!p);
  const note=chosen&&chosen.id!=='selection'?notes[chosen.id]?.text??'':'';
 
- return <main className={`studio ${sidebarOpen?'with-sidebar':''} ${details&&selectedParts.length?'with-detail':''}`}>
+ return <main className={`studio ${entering?'entering':''} ${intro?'in-intro':''} ${sidebarOpen?'with-sidebar':''} ${details&&selectedParts.length?'with-detail':''}`}>
   {atlas&&<AnatomyScene key={model} atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0,theme,zoom,focus,snapshot,coverage:state.scan?.on?null:coverage,insets}} onSelect={selectPart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError} onScan={setScan}/>}
 
   {/* Sidebar */}
@@ -190,7 +229,7 @@ export default function Home(){
    </div>
    <div className="side-author"><div className="avatar" aria-hidden="true">{AUTHOR.name.split(' ').map(w=>w[0]).join('')}</div><div className="who"><small>Автор</small><b>{AUTHOR.name}</b></div><div className="socials">{AUTHOR_LINKS.map(l=><a key={l.id} href={l.url} target="_blank" rel="noreferrer" aria-label={l.label} title={l.label}><BrandIcon id={l.id} size={17}/></a>)}<button onClick={()=>setFeedback(true)} aria-label="Надіслати відгук" title="Надіслати відгук"><MessageSquareHeart size={17}/></button></div></div>
    <p className="side-note">{model==="female"?"Жіноча модель: HRA / HuBMAP, CC BY 4.0. ":""}Навчальний ресурс, не для діагностики чи лікування. Версія {__BUILD__}.</p>
-   <footer className="side-foot">{!wide&&<button onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}{theme==='dark'?'Світла тема':'Темна тема'}</button>}<button onClick={()=>{setDrawer(false);setGuide(0);}}><CircleHelp size={15}/>Довідка</button><button onClick={()=>setAbout(true)}><Info size={15}/>Джерела</button></footer>
+   <footer className="side-foot">{!wide&&<button onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}{theme==='dark'?'Світла тема':'Темна тема'}</button>}<button onClick={startGuide}><CircleHelp size={15}/>Навчання</button><button onClick={()=>setAbout(true)}><Info size={15}/>Джерела</button></footer>
   </aside>
 
   {/* Top bar */}
@@ -203,7 +242,7 @@ export default function Home(){
    <div className="top-actions">
     {wide&&<button className="icon-btn raised" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} aria-label={theme==='dark'?'Світла тема':'Темна тема'} title={theme==='dark'?'Світла тема':'Темна тема'}>{theme==='dark'?<Sun size={20}/>:<Moon size={20}/>}</button>}
     <button className="feedback-btn raised" onClick={()=>setFeedback(true)} aria-label="Надіслати відгук" title="Надіслати відгук"><MessageSquareHeart size={19}/><span>Відгук</span></button>
-    {wide&&<button className="icon-btn raised" onClick={()=>setGuide(0)} aria-label="Як користуватися" title="Як користуватися"><CircleHelp size={20}/></button>}
+    {wide&&<button className="icon-btn raised help-btn" onClick={startGuide} aria-label="Навчання: як користуватися" title="Навчання: як користуватися"><CircleHelp size={20}/></button>}
    </div>
   </div>
 
@@ -268,16 +307,21 @@ export default function Home(){
   </aside>}
 
   {toast&&<div className="toast glass" role="status">{toast}</div>}
+  {tip&&!toast&&<div className="tip glass" role="status"><Lightbulb size={18}/><p><b>Порада</b>{tip}</p><button className="icon-btn small" onClick={()=>setTip(null)} aria-label="Закрити пораду"><X size={16}/></button></div>}
   {progress<100&&!error&&!intro&&<div className="loading glass" role="status"><div className="spinner"/><div><strong>Готуємо анатомічну модель</strong><span>{progress}% · {atlas?.parts.length.toLocaleString('uk')??'…'} структур</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
   {error&&<div className="loading glass error" role="alert"><p>{error}</p><button className="btn" onClick={()=>location.reload()}>Перезавантажити</button></div>}
 
-  {guide!==null&&!intro&&<Tour step={guide} onStep={setGuide} onClose={closeGuide} steps={[
-   {target:'.model-pill',title:'Оберіть модель',text:'Перемикайте тут: «Чоловік» — усе тіло, «Жінка» — тулуб з органами малого таза й молочними залозами.'},
-   {target:'.quickbar',title:'Швидкі інструменти',text:'Пошук, «Скляне тіло» (усе прозоре, крім вибраного), «Підписи», «Зріз» і «Сканер». Увімкнена кнопка світиться.'},
-   {target:null,title:'Клацніть будь-яку структуру',text:wide?'Наведіть курсор на тіло, щоб побачити назву, і клацніть, щоб відкрити картку з описом. Перетягуйте мишею, щоб обертати, колесом змінюйте масштаб.':'Торкніться будь-якої частини тіла, щоб відкрити картку з описом. Одним пальцем обертайте, двома змінюйте масштаб.'},
-   {target:wide?'.sidebar .search-field':'.menu-btn',title:wide?'Пошук і системи органів':'Меню',text:wide?'Шукайте українською, латиною чи англійською. Нижче — системи органів: показати, сховати, «Рентген», «Соло», а ще розбирання на елементи й збереження зображення.':'Тут пошук, системи органів, розбирання на елементи, збереження зображення й вкладка «Навчання» з нотатками.'},
-   {target:'.camera-bar',title:'Камера',text:'«Вписати» повертає все тіло в кадр. П, З, Л, Пр, В — вигляд спереду, ззаду, зліва, справа, згори. Лупи змінюють масштаб, приціл наближає до вибраного.'},
-   {target:'.feedback-btn',title:'Відгук автору',text:'Знайшли помилку чи маєте ідею? Напишіть напряму автору атласу.'},
+  {guide!==null&&!intro&&<Tour step={guide} onStep={setGuide} onClose={closeGuide} stage={{x:insets.left+(innerWidth-insets.left-insets.right)/2,y:insets.top+(innerHeight-insets.top-insets.bottom)*.42}} steps={[
+   {target:null,title:'Вітаємо в атласі!',text:'Покажемо головне за хвилину. На кожному кроці спробуйте дію самі: підказка перейде далі, щойно все вийде.'},
+   {target:null,gesture:'drag',title:'Покрутіть тіло',text:wide?'Тіло можна оглянути з будь-якого боку й наблизити.':'Тіло можна оглянути з будь-якого боку й наблизити.',task:wide?'Затисніть ліву кнопку миші на тілі й потягніть убік. Коліщатко — масштаб.':'Проведіть пальцем по тілу. Двома пальцями — масштаб.'},
+   {target:null,gesture:'tap',title:'Оберіть структуру',text:wide?'Наведіть курсор, щоб побачити назву, і клацніть, щоб відкрити картку.':'Торкніться частини тіла, щоб відкрити її картку.',task:wide?'Клацніть будь-яку частину тіла.':'Торкніться будь-якої частини тіла.',done:state.selected.length>0},
+   {target:'.detail',title:'Картка структури',text:'Тут українська й латинська назви, опис, «Ізолювати», «Наблизити», судини поруч і ваша нотатка. Закрити картку — хрестик або Esc.'},
+   {target:'.quickbar',title:'Швидкі інструменти',text:'Пошук, «Скляне тіло», «Підписи», «Зріз» і «Сканер». Увімкнений інструмент світиться.',task:'Натисніть «Скляне тіло».',done:!!state.glass},
+   {target:'.model-pill',title:'Чоловік чи жінка',text:'«Чоловік» — усе тіло, 2 234 структури. «Жінка» — тулуб з органами малого таза й молочними залозами.',task:'Перемкніть модель.',done:model!==tourModel},
+   wide?{target:'.sidebar .search-field',title:'Пошук',text:'Шукайте українською, латиною чи англійською, у будь-якому відмінку. Нижче — системи органів з «Рентгеном» і «Соло».',task:'Введіть слово, наприклад «серце» або «femur».',done:query.trim().length>=3}
+    :{target:'.menu-btn',title:'Меню',text:'У меню пошук, системи органів, розбирання на елементи, збереження зображення й вкладка «Навчання» з нотатками.',task:'Відкрийте меню.',done:drawer},
+   {target:'.camera-bar',title:'Камера',text:'«Вписати» повертає все тіло в кадр. П, З, Л, Пр, В — вигляд спереду, ззаду, зліва, справа, згори.',task:'Натисніть «З», щоб подивитися ззаду.',done:state.view==='back'},
+   {target:'.feedback-btn',finale:true,title:'Готово!',text:wide?'Навчання можна повторити кнопкою «?» угорі. Ідеї й помилки надсилайте автору кнопкою «Відгук».':'Навчання можна повторити в меню, кнопка «Навчання». Ідеї й помилки надсилайте автору кнопкою «Відгук».'},
   ]}/>}
   {feedback&&<div className="modal-scrim" onClick={()=>setFeedback(false)}><form className="feedback glass" role="dialog" aria-label="Відгук" onClick={e=>e.stopPropagation()} onSubmit={e=>{e.preventDefault();if(!fbText.trim())return;location.href=feedbackMailto({kind:fbKind,message:fbText,name:fbName,contact:fbContact,context:`${model==='female'?'жіноча':'чоловіча'} модель${chosen?`, структура «${chosen.name}»`:''}, ${navigator.userAgent.includes('Mobile')?'телефон':'комп\'ютер'}`});setToast('Відкрито лист у поштовому застосунку. Дякую!');setFeedback(false);setFbText('');}}>
    <header><div><h2>Надіслати відгук</h2><p>Ідеї, помилки в назвах чи просто враження. Відгук отримає {AUTHOR.name}.</p></div><button type="button" className="icon-btn" onClick={()=>setFeedback(false)} aria-label="Закрити"><X size={20}/></button></header>
@@ -288,7 +332,7 @@ export default function Home(){
    <p className="fb-alt">Не відкривається пошта? Напишіть на <b>{AUTHOR.email}</b> <button type="button" className="link" onClick={()=>{navigator.clipboard?.writeText(AUTHOR.email).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1600);}).catch(()=>{});}}>{copied?<><Check size={14}/>Скопійовано</>:<><Copy size={14}/>Копіювати</>}</button></p>
    {AUTHOR_LINKS.length>0&&<div className="fb-socials">{AUTHOR_LINKS.map(l=><a key={l.id} href={l.url} target="_blank" rel="noreferrer"><BrandIcon id={l.id} size={17}/>{l.label}</a>)}</div>}
   </form></div>}
-  {intro&&<Intro progress={error?0:progress} onEnter={closeIntro} onFeedback={()=>setFeedback(true)}/>}
+  {intro&&<Intro progress={error?0:progress} chapters={chapters} onChapter={onChapter} onEnter={closeIntro} onFeedback={()=>setFeedback(true)} tourNext={!read('atlas-tour-done',false)} stats={[{label:'структур чоловічого тіла',value:2234},{label:'структури жіночого тулуба',value:264},{label:'мови назв',value:3}]}/>}
   {help&&<div className="modal-scrim" onClick={()=>setHelp(false)}><div className="help glass" role="dialog" aria-label="Клавіші" onClick={e=>e.stopPropagation()}><header><h2>Керування</h2><button className="icon-btn" onClick={()=>setHelp(false)} aria-label="Закрити"><X size={20}/></button></header>
    <p className="hint">Мишею: перетягування обертає, права кнопка зсуває, колесо масштабує в точку під курсором. На телефоні: один палець обертає, два масштабують.</p>
    <dl>{SHORTCUTS.map(([k,v])=><div key={k}><dt><kbd>{k}</kbd></dt><dd>{v}</dd></div>)}</dl></div></div>}
