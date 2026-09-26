@@ -241,3 +241,15 @@ html[data-theme=light] .socials a,html[data-theme=light] .socials button{backgro
 button.brand-mark{border:0;cursor:pointer;transition:transform .3s}button.brand-mark:hover{transform:rotate(-8deg) scale(1.06)}
 @media(max-width:899px){.feedback-btn span{display:none}.feedback-btn{width:44px;height:44px;padding:0;justify-content:center}.field-row{flex-direction:column}}
 .intro-title .word{display:inline-block;white-space:nowrap}.intro-title .word>span{display:inline-block;animation:letterIn .7s cubic-bezier(.2,.8,.2,1) both}.intro-title>span.word{animation:none}
+/* ============ Spotlight tour ============ */
+.tour{position:fixed;inset:0;z-index:90;animation:fade .3s both}
+.tour-dim{position:absolute;inset:0;background:#02060acc}
+.tour-spot{position:absolute;border-radius:18px;box-shadow:0 0 0 9999px #02060ad0,0 0 0 3px var(--accent),0 0 40px 6px #4fd1c566;transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1),width .45s cubic-bezier(.2,.8,.2,1),height .45s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.tour-spot::after{content:'';position:absolute;inset:-8px;border-radius:24px;border:2px solid var(--accent);animation:spotPulse 1.6s ease-out infinite}
+.tour-card{position:absolute;padding:20px 20px 16px;border-radius:20px;background:var(--panel-solid);border:1px solid var(--line-2);box-shadow:0 24px 70px #000000aa;animation:tourIn .4s cubic-bezier(.2,.8,.2,1) both;transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1)}
+.tour-step{font-size:12.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.tour-card h2{margin:6px 0 6px;font-size:22px;font-weight:700;letter-spacing:-.3px}.tour-card p{margin:0;font-size:16px;line-height:1.55;color:var(--text-2)}
+.tour-bar{height:4px;border-radius:2px;background:var(--panel-3);margin:16px 0 14px;overflow:hidden}.tour-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#60a5fa);transition:width .45s cubic-bezier(.2,.8,.2,1)}
+.tour-nav{display:flex;align-items:center;gap:8px}.tour-nav .btn{min-height:46px}.tour-nav .btn.primary{padding:0 20px}.tour-skip{margin-right:auto;font-size:14px;color:var(--text-3);padding:8px 4px}.tour-skip:hover{color:var(--text)}
+@keyframes spotPulse{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
+@keyframes tourIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}

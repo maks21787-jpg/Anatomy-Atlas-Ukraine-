@@ -42,7 +42,7 @@ export default function Intro({progress,onEnter,onFeedback}:{progress:number;onE
     <div className="who"><small>Створено</small><b>{AUTHOR.name}</b></div>
     <div className="socials">{AUTHOR_LINKS.map(l=><a key={l.id} href={l.url} target="_blank" rel="noreferrer" aria-label={l.label} title={l.label}><BrandIcon id={l.id}/></a>)}<a href={`mailto:${AUTHOR.email}`} aria-label="Пошта" title={AUTHOR.email}><BrandIcon id="mail"/></a></div>
    </div>
-   <p className="intro-foot">Навчальний ресурс, не для діагностики · BodyParts3D (DBCLS) і Human Reference Atlas (HuBMAP), CC BY 4.0</p>
+   <p className="intro-foot">Версія {__BUILD__} · Навчальний ресурс, не для діагностики · BodyParts3D (DBCLS) і Human Reference Atlas (HuBMAP), CC BY 4.0</p>
   </div>
  </div>;
 }
