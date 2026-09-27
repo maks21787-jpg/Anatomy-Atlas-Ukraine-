@@ -32,6 +32,8 @@ export interface SceneState {
  theme?:Theme;zoom?:{id:number;factor:number};focus?:number;snapshot?:number;
  /** Auto-rotation speed; the intro spins the body faster than the atlas does. */
  spin?:number;
+ /** Plate mode: no stage under the body, used to render the illustrations on the opening page. */
+ bare?:boolean;
  hidden?:string[];xray?:SystemId[];glass?:boolean;labels?:LabelMode;
  section?:{axis:SectionAxis;position:number}|null;
  scan?:{on:boolean;hold:boolean;position:number};
