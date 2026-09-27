@@ -34,6 +34,8 @@ export interface SceneState {
  spin?:number;
  /** Plate mode: no stage under the body, used to render the illustrations on the opening page. */
  bare?:boolean;
+ /** Plate mode: turns the camera around the body by this many degrees, for turntable videos. */
+ angle?:number;
  hidden?:string[];xray?:SystemId[];glass?:boolean;labels?:LabelMode;
  section?:{axis:SectionAxis;position:number}|null;
  scan?:{on:boolean;hold:boolean;position:number};

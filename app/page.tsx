@@ -39,6 +39,8 @@ const PLATES:Record<string,Partial<SceneState>&{concept?:string}>={
  vessels:{visible:['skeletal','cardiac','arterial','venous'],xray:['skeletal'],view:'front'},
  organs:{visible:['skeletal','cardiac','respiratory','digestive','urinary','endocrine','reproductive','lymphatic'],xray:['skeletal'],view:'front'},
  back:{visible:['skeletal','muscular'],view:'back'},
+ musclesfront:{visible:['skeletal','muscular'],view:'front'},
+ vesselsturn:{visible:['skeletal','cardiac','arterial','venous'],xray:['skeletal'],view:'front'},
  female:{visible:['skeletal','urinary','reproductive','venous','arterial','lymphatic'],hidden:['body_of_breast_l','body_of_breast_r'],view:'front'},
 };
 const PLATE=typeof location!=='undefined'?new URLSearchParams(location.search).get('plate'):null;
@@ -129,6 +131,8 @@ export default function Home(){
  },[guide===0]);
  useEffect(()=>{if(!wide&&guide!==null&&guide>6)setDrawer(false);},[guide,wide]);
 
+ // Plate mode reads a camera angle from the hash (#a=90), so turntable frames can be captured one by one.
+ useEffect(()=>{if(!PLATE)return;const apply=()=>{const m=/a=(-?[\d.]+)/.exec(location.hash);setState(s=>({...s,angle:m?+m[1]:0}));};apply();addEventListener('hashchange',apply);return()=>removeEventListener('hashchange',apply);},[]);
  useEffect(()=>{const preset=PLATE&&atlas?PLATES[PLATE]:null;if(!preset)return;const {concept,...rest}=preset;const selected=concept?atlas!.concepts.find(c=>c.id===concept)?.elements??[]:[];setState(s=>({...s,...rest,selected,labels:null,bare:true,reset:s.reset+1}));},[atlas]);
  const insets:Insets=useMemo(()=>PLATE?{left:0,right:0,top:0,bottom:0}:wide?{left:(drawer||wide)?356:0,right:details&&selectedParts.length?430:12,top:64,bottom:96}:{left:0,right:0,top:84,bottom:details&&selectedParts.length?Math.round(innerHeight*.5):150},[wide,drawer,details,selectedParts.length]);
  const zoomBy=(factor:number)=>setZoom(z=>({id:z.id+1,factor}));

@@ -32,7 +32,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
  latest.current=state;select.current=onSelect;scanned.current=onScan;
  useEffect(()=>{
   const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,amount=0;
-  let lastView='',lastReset=-1,lastIsolate='',layoutKey='',lastTheme='',lastZoom=0,lastFocus=0,lastSnapshot=0,lastFlags='',lastSection='';
+  let lastAngle=0,lastView='',lastReset=-1,lastIsolate='',layoutKey='',lastTheme='',lastZoom=0,lastFocus=0,lastSnapshot=0,lastFlags='',lastSection='';
   let lastState:SceneState|null=null,hoverIndex=-1,scanY=1.7,scanDirection=-1,lastScanReport=0,labels:Label[]=[];
   let flight:{fromTarget:T.Vector3;toTarget:T.Vector3;dir:T.Vector3;turn:T.Quaternion;fromLength:number;toLength:number;start:number;duration:number}|null=null;
   const still=new T.Quaternion(),turning=new T.Quaternion();
@@ -61,7 +61,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
   // partTexture: xyz explosion offset, w visible. flagTexture: r selected, g ghost (x-ray), b glow (scanner or study coverage), a hover.
   const width=T.MathUtils.ceilPowerOfTwo(atlas.parts.length),data=new Float32Array(width*4),partTexture=new T.DataTexture(data,width,1,T.RGBAFormat,T.FloatType);partTexture.needsUpdate=true;
   const flags=new Uint8Array(width*4),flagTexture=new T.DataTexture(flags,width,1);flagTexture.needsUpdate=true;
-  const glowColor={value:SCAN_COLOR.clone()},revealY={value:1e3};
+  const glowColor={value:SCAN_COLOR.clone()},revealY={value:1e3},flash={value:0};let flashStart=0;
   // Newly shown structures materialise from the feet up behind a glowing band; w=2 in partTexture marks them.
   const revealing=new Uint8Array(atlas.parts.length),reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;let reveal:{start:number;duration:number}|null=null,revealedOnce=false;
   const materials:T.Material[]=[],geometries:T.BufferGeometry[]=[],pickers:(T.Mesh|undefined)[]=[],centers=atlas.parts.map(p=>new T.Vector3().fromArray(p.bounds[0]).add(new T.Vector3().fromArray(p.bounds[1])).multiplyScalar(.5));
@@ -97,13 +97,13 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
    const m=new T.MeshStandardMaterial({color:SYSTEMS.find(s=>s.id===system)?.color??'#aebbb8',metalness:.08,roughness:ghost?.35:.53,side:T.DoubleSide,transparent:ghost,opacity:ghost?(skin?.1:.16):1,depthWrite:!ghost});
    m.clippingPlanes=clipping;
    m.onBeforeCompile=shader=>{
-    shader.uniforms.partState={value:partTexture};shader.uniforms.flagState={value:flagTexture};shader.uniforms.stateWidth={value:width};shader.uniforms.glowColor=glowColor;shader.uniforms.revealY=revealY;
+    shader.uniforms.partState={value:partTexture};shader.uniforms.flagState={value:flagTexture};shader.uniforms.stateWidth={value:width};shader.uniforms.glowColor=glowColor;shader.uniforms.revealY=revealY;shader.uniforms.flash=flash;
     shader.vertexShader='attribute float partIndex; uniform sampler2D partState; uniform sampler2D flagState; uniform float stateWidth; varying float partVisible; varying vec4 partFlags; varying float partY;\n'+shader.vertexShader;
     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvec2 stateUv = vec2((partIndex + 0.5) / stateWidth, 0.5); vec4 state = texture2D(partState, stateUv); transformed += state.xyz; partVisible = state.w; partY = transformed.y; partFlags = texture2D(flagState, stateUv);');
-    shader.fragmentShader='uniform vec3 glowColor; uniform float revealY; varying float partVisible; varying vec4 partFlags; varying float partY;\n'+shader.fragmentShader;
+    shader.fragmentShader='uniform vec3 glowColor; uniform float revealY; uniform float flash; varying float partVisible; varying vec4 partFlags; varying float partY;\n'+shader.fragmentShader;
     shader.fragmentShader=shader.fragmentShader.replace('#include <clipping_planes_fragment>',`#include <clipping_planes_fragment>\nif (partVisible < 0.5 || ${ghost?'partFlags.g < 0.5':'partFlags.g > 0.5'}) discard;\nif (partVisible > 1.5 && partY > revealY) discard;`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.64, 0.16), partFlags.r * 0.58);');
-    shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance += glowColor * partFlags.b * 0.85 + vec3(partFlags.a * 0.16);\nif (partVisible > 1.5) totalEmissiveRadiance += vec3(0.95, 0.68, 0.22) * smoothstep(0.08, 0.0, revealY - partY) * 1.4;');
+    shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance += glowColor * partFlags.b * 0.85 + vec3(partFlags.a * 0.16);\ntotalEmissiveRadiance += vec3(0.95, 0.68, 0.22) * partFlags.r * flash;\nif (partVisible > 1.5) totalEmissiveRadiance += vec3(0.95, 0.68, 0.22) * smoothstep(0.08, 0.0, revealY - partY) * 1.4;');
     if(ghost)shader.fragmentShader=shader.fragmentShader.replace('#include <dithering_fragment>','#include <dithering_fragment>\nfloat rim = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.0);\ngl_FragColor.a = max(gl_FragColor.a * mix(0.45, 2.4, rim), partFlags.b * 0.6);');
    };
    // Same compile hook source for every system keeps three.js from compiling one program per material.
@@ -151,7 +151,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
    const normalDistance=Math.max(bodyH*h/freeH,bodyW*w/freeW/camera.aspect)/(2*tanHalf())*1.06;
    const atlasDistance=Math.max(packingHeight*h/freeH,packingWidth*w/freeW/camera.aspect)/(2*tanHalf())*1.06;
    const distance=T.MathUtils.lerp(normalDistance,Math.max(.2,atlasDistance),extent);
-   const target=new T.Vector3(0,extent>.1?midY:center.y,0),position=target.clone().addScaledVector(DIRECTIONS[view],distance);
+   const target=new T.Vector3(0,extent>.1?midY:center.y,0),position=target.clone().addScaledVector(DIRECTIONS[view].clone().applyAxisAngle(new T.Vector3(0,1,0),T.MathUtils.degToRad(latest.current.angle??0)),distance);
    if(smooth&&!reduceMotion){flyTo(position,target,.9);dirty=true;return;}
    flight=null;controls.target.copy(target);camera.position.copy(position);controls.update();dirty=true;
   };
@@ -220,6 +220,9 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
   const clock=new T.Clock();let lastExtent=-1;
   const animate=()=>{
    if(disposed)return;frame=requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05),s=latest.current;
+   // A newly picked structure flashes once so the eye finds it.
+   if(lastState&&lastState.selected!==s.selected&&s.selected.length&&!reduceMotion)flashStart=performance.now();
+   if(flashStart){const t=(performance.now()-flashStart)/900;flash.value=t>=1?0:Math.pow(1-t,2)*.9;if(t>=1)flashStart=0;dirty=true;}
    const changed=lastState?.visible!==s.visible||lastState?.selected!==s.selected||lastState?.isolate!==s.isolate||lastState?.hidden!==s.hidden;
    const moving=Math.abs(amount-s.explode)>.0001;
    if(moving){amount=T.MathUtils.damp(amount,s.explode,8,dt);dirty=true;}
@@ -274,7 +277,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,on
     const now=performance.now();if(scanning&&now-lastScanReport>140){lastScanReport=now;const top=body.max.y-.02,bottom=body.min.y+.03;scanned.current?.({position:(top-scanY)/(top-bottom),crossing:crossing.sort((a,b)=>volumes[b]-volumes[a]).map(i=>atlas.parts[i].id)});}
    }
 
-   if(s.view!==lastView||s.reset!==lastReset){fit(s.view,amount,ready&&lastView!==''&&amount<.05);lastView=s.view;lastReset=s.reset;}
+   if(s.view!==lastView||s.reset!==lastReset||(s.angle??0)!==lastAngle){fit(s.view,amount,ready&&lastView!==''&&amount<.05&&!s.bare);lastView=s.view;lastReset=s.reset;lastAngle=s.angle??0;}
    if((s.theme??'light')!==lastTheme){lastTheme=s.theme??'light';applyTheme(lastTheme as 'light'|'dark');}
    if(s.zoom&&s.zoom.id!==lastZoom){lastZoom=s.zoom.id;const offset=camera.position.clone().sub(controls.target),length=T.MathUtils.clamp(offset.length()*s.zoom.factor,controls.minDistance,controls.maxDistance);flyTo(controls.target.clone().add(offset.setLength(length)),controls.target.clone(),.4);}
    if(s.focus&&s.focus!==lastFocus){lastFocus=s.focus;const box=new T.Box3();atlas.parts.forEach((p,i)=>{if(selection.has(p.id)&&data[i*4+3]>.5)box.union(bounds[i].clone().translate(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])));});
