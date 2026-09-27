@@ -479,3 +479,6 @@ html[data-theme=dark] .plate-frame{background:#efe8da;border-color:#f3ead830}
 .detail>.accent{transform-origin:left;animation:ruleDraw .6s .1s cubic-bezier(.2,.8,.2,1) both}
 .systems li{animation:rise .4s both}.systems li:nth-child(2){animation-delay:.03s}.systems li:nth-child(3){animation-delay:.06s}.systems li:nth-child(4){animation-delay:.09s}.systems li:nth-child(5){animation-delay:.12s}.systems li:nth-child(n+6){animation-delay:.15s}
 @media(max-width:899px){.ln-hero-plate{order:-1}.ln-hero-plate .plate-frame{max-width:300px}.ln-hero{padding-top:20px}}
+/* Title page stands alone until real plates are added */
+.ln-hero{grid-template-columns:1fr;justify-items:center}
+.ln-title-page{width:100%;max-width:860px}
