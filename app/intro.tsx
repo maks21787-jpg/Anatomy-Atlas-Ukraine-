@@ -24,6 +24,32 @@ function Count({to}:{to:number}){
  return <b ref={el}>{n.toLocaleString('uk')}</b>;
 }
 
+const WORDS=['Sceleton','Musculi','Cor','Vasa','Encephalon','Homo'];
+
+/** Proportion figure after Vitruvius: circle, square, measuring ticks and axes, drawn line by line. */
+function Vitruvian({className=''}:{className?:string}){
+ return <svg className={`vitruvian ${className}`} viewBox="0 0 400 400" aria-hidden="true">
+  <circle className="v-circle" cx="200" cy="200" r="176"/>
+  <rect className="v-square" x="52" y="80" width="296" height="296"/>
+  <g className="v-ticks">{Array.from({length:72},(_,i)=><line key={i} x1="200" y1="14" x2="200" y2={i%6===0?30:22} transform={`rotate(${i*5} 200 200)`}/>)}</g>
+  <line className="v-axis" x1="200" y1="8" x2="200" y2="392"/><line className="v-axis h" x1="8" y1="200" x2="392" y2="200"/>
+  <circle className="v-core" cx="200" cy="200" r="3"/>
+ </svg>;
+}
+
+/** A few seconds of opening titles: the figure draws itself while Latin names of the body's parts pass through its centre. */
+function Opening({onReveal,onDone}:{onReveal:()=>void;onDone:()=>void}){
+ const [word,setWord]=useState(0),[out,setOut]=useState(false);
+ useEffect(()=>{if(reduced){onReveal();onDone();return;}const timers=[...WORDS.map((_,i)=>setTimeout(()=>setWord(i),900+i*520)),setTimeout(()=>{setOut(true);onReveal();},900+WORDS.length*520+300),setTimeout(onDone,900+WORDS.length*520+1200)];return()=>timers.forEach(clearTimeout);// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[]);
+ return <div className={`opening ${out?'out':''}`} onClick={()=>{onReveal();onDone();}} role="presentation">
+  <Vitruvian/>
+  <div className="op-word" key={word}><span>{WORDS[word]}</span></div>
+  <p className="op-foot">Atlas anatomiae humanae · {AUTHOR.name}</p>
+  <button className="op-skip" onClick={e=>{e.stopPropagation();onReveal();onDone();}}>Пропустити</button>
+ </div>;
+}
+
 /** Adds .in to every .reveal element once it scrolls into view, so sections settle in as the reader reaches them. */
 function useReveal(root:React.RefObject<HTMLElement|null>){
  useEffect(()=>{const el=root.current;if(!el)return;const items=[...el.querySelectorAll('.reveal')];
@@ -34,7 +60,7 @@ function useReveal(root:React.RefObject<HTMLElement|null>){
 
 /** Opening page, laid out like the title spread, contents and plates of a printed anatomical atlas. */
 export default function Intro({progress,onEnter,onFeedback}:{progress:number;onEnter:(target?:string)=>void;onFeedback:()=>void}){
- const [leaving,setLeaving]=useState(false),root=useRef<HTMLDivElement>(null);
+ const [leaving,setLeaving]=useState(false),[opened,setOpened]=useState(false),[titlesGone,setTitlesGone]=useState(false),root=useRef<HTMLDivElement>(null);
  useReveal(root);
  const ready=progress>=100;
  const enter=(target?:string)=>{if(leaving)return;setLeaving(true);setTimeout(()=>onEnter(target),850);};
@@ -48,8 +74,11 @@ export default function Intro({progress,onEnter,onFeedback}:{progress:number;onE
    <button className="ln-btn small" onClick={()=>enter()}>Відкрити атлас<ArrowRight size={16}/></button>
   </header>
 
-  <section className="ln-hero">
+  {!titlesGone&&<Opening onReveal={()=>setOpened(true)} onDone={()=>setTitlesGone(true)}/>}
+  {opened&&<section className="ln-hero">
+   <Vitruvian className="bg"/>
    <div className="ln-title-page">
+    <i className="corner tl"/><i className="corner tr"/><i className="corner bl"/><i className="corner br"/>
     <p className="ln-running"><span className="line"><span>Atlas anatomiae humanae</span></span></p>
     <h1><span className="line"><span>Атлас</span></span><span className="line"><span>анатомії</span></span><span className="line"><span><em>людини</em></span></span></h1>
     <p className="ln-sub">у трьох вимірах, з назвами українською, латиною та англійською</p>
@@ -61,7 +90,7 @@ export default function Intro({progress,onEnter,onFeedback}:{progress:number;onE
     </div>
     <p className="ln-status" aria-live="polite"><span className="track"><i style={{width:`${Math.max(3,progress)}%`}}/></span><span>{status}</span></p>
    </div>
-  </section>
+  </section>}
 
   <div className="ln-ticker" aria-hidden="true">{TERMS.map((row,r)=><div key={r} className={`row ${r?'rev':''}`}><div>{[...row,...row].map((t,i)=><span key={i}>{t}<i>✦</i></span>)}</div></div>)}</div>
 

@@ -15,7 +15,7 @@ interface Rect {x:number;y:number;w:number;h:number}
  * Interactive spotlight tour. The overlay never blocks the page: the reader performs each task on the real
  * controls while a lit window, a card and, where it helps, an animated hand show where to act.
  */
-export default function Tour({steps,step,onStep,onClose,stage}:{steps:TourStep[];step:number;onStep:(n:number)=>void;onClose:()=>void;stage:{x:number;y:number}}){
+export default function Tour({steps,step,onStep,onClose,onFinish,stage}:{steps:TourStep[];step:number;onStep:(n:number)=>void;onClose:()=>void;onFinish:()=>void;stage:{x:number;y:number}}){
  const current=steps[step],last=step===steps.length-1;
  const [rect,setRect]=useState<Rect|null>(null),[view,setView]=useState({w:innerWidth,h:innerHeight}),[dragged,setDragged]=useState(false),[card,setCard]=useState({w:360,h:240});
  const cardRef=useRef<HTMLDivElement>(null);
@@ -32,9 +32,9 @@ export default function Tour({steps,step,onStep,onClose,stage}:{steps:TourStep[]
  // Turning or zooming the body counts as done for the 'drag' step.
  useEffect(()=>{if(current.gesture!=='drag')return;let moved=0;const onMove=(e:PointerEvent)=>{if(!(e.target instanceof HTMLCanvasElement)||!(e.buttons||e.pointerType==='touch'))return;moved+=Math.abs(e.movementX)+Math.abs(e.movementY);if(moved>60)setDragged(true);};const onWheel=(e:WheelEvent)=>{if(e.target instanceof HTMLCanvasElement)setDragged(true);};addEventListener('pointermove',onMove,true);addEventListener('wheel',onWheel,true);return()=>{removeEventListener('pointermove',onMove,true);removeEventListener('wheel',onWheel,true);};},[current.gesture,step]);
  // A finished task moves on by itself after a short confirmation.
- const nav=useRef({onStep,onClose});nav.current={onStep,onClose};const hasTask=!!current.task;
- useEffect(()=>{if(!done||!hasTask)return;const t=setTimeout(()=>last?nav.current.onClose():nav.current.onStep(step+1),1300);return()=>clearTimeout(t);},[done,hasTask,step,last]);
- useEffect(()=>{const k=(e:KeyboardEvent)=>{const typing=e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement;if(e.key==='Escape'&&!typing){e.preventDefault();e.stopPropagation();onClose();return;}if(typing)return;if(e.key==='ArrowRight'||e.key==='Enter'){e.preventDefault();e.stopPropagation();last?onClose():onStep(step+1);}else if(e.key==='ArrowLeft'&&step>0){e.stopPropagation();onStep(step-1);}};addEventListener('keydown',k,true);return()=>removeEventListener('keydown',k,true);},[step,last,onStep,onClose]);
+ const nav=useRef({onStep,onClose,onFinish});nav.current={onStep,onClose,onFinish};const hasTask=!!current.task;
+ useEffect(()=>{if(!done||!hasTask)return;const t=setTimeout(()=>last?nav.current.onFinish():nav.current.onStep(step+1),1300);return()=>clearTimeout(t);},[done,hasTask,step,last]);
+ useEffect(()=>{const k=(e:KeyboardEvent)=>{const typing=e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement;if(e.key==='Escape'&&!typing){e.preventDefault();e.stopPropagation();onClose();return;}if(typing)return;if(e.key==='ArrowRight'||e.key==='Enter'){e.preventDefault();e.stopPropagation();last?onFinish():onStep(step+1);}else if(e.key==='ArrowLeft'&&step>0){e.stopPropagation();onStep(step-1);}};addEventListener('keydown',k,true);return()=>removeEventListener('keydown',k,true);},[step,last,onStep,onClose]);
 
  // Place the card beside the lit control: below, above, left or right, whichever has room; without a target it sits clear of the body.
  // On a phone it docks to the top or bottom edge, on the side away from the control, so panels that open in the lower half stay visible.
@@ -66,7 +66,7 @@ export default function Tour({steps,step,onStep,onClose,stage}:{steps:TourStep[]
    <div className="tour-nav">
     {!last&&<button className="tour-skip" onClick={onClose}>Пропустити</button>}
     {step>0&&<button className="btn" onClick={()=>onStep(step-1)} aria-label="Назад"><ArrowLeft size={17}/></button>}
-    <button className={`btn ${current.task&&!done?'':'primary'}`} onClick={()=>last?onClose():onStep(step+1)}>{last?<>Почати роботу<Check size={17}/></>:step===0?<>Почати<ArrowRight size={17}/></>:current.task&&!done?<>Далі без цього<ArrowRight size={17}/></>:<>Далі<ArrowRight size={17}/></>}</button>
+    <button className={`btn ${current.task&&!done?'':'primary'}`} onClick={()=>last?onFinish():onStep(step+1)}>{last?<>Почати роботу<Check size={17}/></>:step===0?<>Почати<ArrowRight size={17}/></>:current.task&&!done?<>Далі без цього<ArrowRight size={17}/></>:<>Далі<ArrowRight size={17}/></>}</button>
    </div>
   </div>}
  </div>;

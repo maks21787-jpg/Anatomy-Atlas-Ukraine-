@@ -44,6 +44,8 @@ const PLATES:Record<string,Partial<SceneState>&{concept?:string}>={
  female:{visible:['skeletal','urinary','reproductive','venous','arterial','lymphatic'],hidden:['body_of_breast_l','body_of_breast_r'],view:'front'},
 };
 const PLATE=typeof location!=='undefined'?new URLSearchParams(location.search).get('plate'):null;
+/** Bumped when the tour changes, so every reader sees the new one once. */
+const TOUR_KEY='atlas-tour-v4';
 const PAGE=60;
 const SHORTCUTS:[string,string][]=[['/','Пошук'],['Esc','Скасувати вибір, закрити панель'],['Ctrl + клік','Вибрати кілька структур'],['I','Ізолювати вибране'],['H','Сховати вибране'],['U','Показати приховане'],['F','Наблизити до вибраного'],['+ / −','Масштаб'],['0','Вписати тіло в екран'],['1–5','Спереду, ззаду, зліва, справа, згори'],['L','Підписи'],['G','Скляне тіло'],['S','Сканер']];
 function plural(n:number,one:string,few:string,many:string){const m10=n%10,m100=n%100;return m10===1&&m100!==11?one:m10>=2&&m10<=4&&(m100<12||m100>14)?few:many;}
@@ -71,7 +73,7 @@ export default function Home(){
  // The intro shows once per browser session; the step-by-step guide follows it on the first ever visit.
  // The animated intro opens on every visit; the spotlight tour follows it until the reader has finished it once.
  const [intro,setIntro]=useState(()=>!PLATE&&!new URLSearchParams(location.search).has('nointro'));
- const [guide,setGuide]=useState<number|null>(()=>!PLATE&&new URLSearchParams(location.search).has('nointro')&&!read('atlas-tour-done',false)?0:null);
+ const [guide,setGuide]=useState<number|null>(()=>!PLATE&&new URLSearchParams(location.search).has('nointro')&&!read(TOUR_KEY,false)?0:null);
  const [entering,setEntering]=useState(false),[tip,setTip]=useState<string|null>(null),[tourModel,setTourModel]=useState<Model>('male');
  /** Leaves the opening page; a chosen plate opens the atlas already showing that layer. */
  const closeIntro=(plate?:string)=>{setIntro(false);const preset=plate?PLATES[plate]:undefined;if(preset&&model==='female')setModel('male');
@@ -79,11 +81,12 @@ export default function Home(){
   const system=plate?.startsWith('system:')?plate.slice(7) as SystemId:null;if(system&&model==='female')setModel('male');
   setState(s=>({...initial,...(preset&&!preset.concept?{visible:preset.visible!,xray:preset.xray??[]}:system?{visible:[system]}:{}),labels:s.labels,reset:s.reset+1}));
   if(concept)setTimeout(()=>{choose(concept);setState(s=>({...s,isolate:true}));},80);
-  setEntering(true);setTimeout(()=>setEntering(false),1600);if(!read('atlas-tour-done',false))setTimeout(()=>setGuide(0),1100);};
+  setEntering(true);setTimeout(()=>setEntering(false),1600);if(!read(TOUR_KEY,false))setTimeout(()=>setGuide(0),1100);};
  const [feedback,setFeedback]=useState(false),[fbKind,setFbKind]=useState('Ідея'),[fbText,setFbText]=useState(''),[fbName,setFbName]=useState(''),[fbContact,setFbContact]=useState(''),[copied,setCopied]=useState(false);
  const openSearch=()=>{setTab('atlas');setDrawer(true);setTimeout(()=>searchInput.current?.focus(),60);};
  /** After the tour the atlas goes back to its starting point: the male model with every system shown. */
- const closeGuide=()=>{setGuide(null);write('atlas-tour-done',true);setModel('male');setQuery('');setDrawer(false);setDetails(false);setChosen(null);setHistory([]);setState(s=>({...initial,labels:s.labels,reset:s.reset+1}));};
+ /** Only finishing the last step counts; a skipped tour is offered again on the next visit. */
+ const closeGuide=(finished=false)=>{setGuide(null);if(finished)write(TOUR_KEY,true);setModel('male');setQuery('');setDrawer(false);setDetails(false);setChosen(null);setHistory([]);setState(s=>({...initial,labels:s.labels,reset:s.reset+1}));};
  const startGuide=()=>{setDrawer(false);setHelp(false);setGuide(0);};
  const sheetDrag=useRef(0);
  const searchInput=useRef<HTMLInputElement>(null),[searchFocused,setSearchFocused]=useState(false);
@@ -258,7 +261,7 @@ export default function Home(){
    <div className="top-actions">
     {wide&&<button className="icon-btn raised" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} aria-label={theme==='dark'?'Світла тема':'Темна тема'} title={theme==='dark'?'Світла тема':'Темна тема'}>{theme==='dark'?<Sun size={20}/>:<Moon size={20}/>}</button>}
     <button className="feedback-btn raised" onClick={()=>setFeedback(true)} aria-label="Надіслати відгук" title="Надіслати відгук"><MessageSquareHeart size={19}/><span>Відгук</span></button>
-    {wide&&<button className="icon-btn raised help-btn" onClick={startGuide} aria-label="Навчання: як користуватися" title="Навчання: як користуватися"><CircleHelp size={20}/></button>}
+    <button className="feedback-btn raised help-btn" onClick={startGuide} aria-label="Навчання: як користуватися" title="Навчання: як користуватися"><CircleHelp size={19}/><span>Навчання</span></button>
    </div>
   </div>
 
@@ -327,7 +330,7 @@ export default function Home(){
   {progress<100&&!error&&!intro&&<div className="loading glass" role="status"><div className="spinner"/><div><strong>Готуємо анатомічну модель</strong><span>{progress}% · {atlas?.parts.length.toLocaleString('uk')??'…'} структур</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
   {error&&<div className="loading glass error" role="alert"><p>{error}</p><button className="btn" onClick={()=>location.reload()}>Перезавантажити</button></div>}
 
-  {guide!==null&&!intro&&<Tour step={guide} onStep={setGuide} onClose={closeGuide} stage={{x:insets.left+(innerWidth-insets.left-insets.right)/2,y:insets.top+(innerHeight-insets.top-insets.bottom)*.42}} steps={[
+  {guide!==null&&!intro&&<Tour step={guide} onStep={setGuide} onClose={closeGuide} onFinish={()=>closeGuide(true)} stage={{x:insets.left+(innerWidth-insets.left-insets.right)/2,y:insets.top+(innerHeight-insets.top-insets.bottom)*.42}} steps={[
    {target:null,title:'Вітаємо в атласі!',text:'Покажемо головне за хвилину. На кожному кроці спробуйте дію самі: підказка перейде далі, щойно все вийде.'},
    {target:null,gesture:'drag',title:'Покрутіть тіло',text:wide?'Тіло можна оглянути з будь-якого боку й наблизити.':'Тіло можна оглянути з будь-якого боку й наблизити.',task:wide?'Затисніть ліву кнопку миші на тілі й потягніть убік. Коліщатко — масштаб.':'Проведіть пальцем по тілу. Двома пальцями — масштаб.'},
    {target:null,gesture:'tap',title:'Оберіть структуру',text:wide?'Наведіть курсор, щоб побачити назву, і клацніть, щоб відкрити картку.':'Торкніться частини тіла, щоб відкрити її картку.',task:wide?'Клацніть будь-яку частину тіла.':'Торкніться будь-якої частини тіла.',done:state.selected.length>0},
@@ -337,7 +340,7 @@ export default function Home(){
    wide?{target:'.sidebar .search-field',title:'Пошук',text:'Шукайте українською, латиною чи англійською, у будь-якому відмінку. Нижче — системи органів з «Рентгеном» і «Соло».',task:'Введіть слово, наприклад «серце» або «femur».',done:query.trim().length>=3}
     :{target:'.menu-btn',title:'Меню',text:'У меню пошук, системи органів, розбирання на елементи, збереження зображення й вкладка «Навчання» з нотатками.',task:'Відкрийте меню.',done:drawer},
    {target:'.camera-bar',title:'Камера',text:'«Вписати» повертає все тіло в кадр. П, З, Л, Пр, В — вигляд спереду, ззаду, зліва, справа, згори.',task:'Натисніть «З», щоб подивитися ззаду.',done:state.view==='back'},
-   {target:'.feedback-btn',finale:true,title:'Готово!',text:wide?'Навчання можна повторити кнопкою «?» угорі. Ідеї й помилки надсилайте автору кнопкою «Відгук».':'Навчання можна повторити в меню, кнопка «Навчання». Ідеї й помилки надсилайте автору кнопкою «Відгук».'},
+   {target:'.feedback-btn',finale:true,title:'Готово!',text:'Навчання можна повторити будь-коли кнопкою «Навчання» (знак питання) угорі. Ідеї й помилки надсилайте автору кнопкою «Відгук».'},
   ]}/>}
   {feedback&&<div className="modal-scrim" onClick={()=>setFeedback(false)}><form className="feedback glass" role="dialog" aria-label="Відгук" onClick={e=>e.stopPropagation()} onSubmit={e=>{e.preventDefault();if(!fbText.trim())return;location.href=feedbackMailto({kind:fbKind,message:fbText,name:fbName,contact:fbContact,context:`${model==='female'?'жіноча':'чоловіча'} модель${chosen?`, структура «${chosen.name}»`:''}, ${navigator.userAgent.includes('Mobile')?'телефон':'комп\'ютер'}`});setToast('Відкрито лист у поштовому застосунку. Дякую!');setFeedback(false);setFbText('');}}>
    <header><div><h2>Надіслати відгук</h2><p>Ідеї, помилки в назвах чи просто враження. Відгук отримає {AUTHOR.name}.</p></div><button type="button" className="icon-btn" onClick={()=>setFeedback(false)} aria-label="Закрити"><X size={20}/></button></header>

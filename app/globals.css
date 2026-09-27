@@ -482,3 +482,35 @@ html[data-theme=dark] .plate-frame{background:#efe8da;border-color:#f3ead830}
 /* Title page stands alone until real plates are added */
 .ln-hero{grid-template-columns:1fr;justify-items:center}
 .ln-title-page{width:100%;max-width:860px}
+/* ============ Opening titles ============ */
+.opening{position:fixed;inset:0;z-index:7;display:grid;place-items:center;background:var(--bg);cursor:pointer;transition:opacity .9s cubic-bezier(.6,0,.2,1),transform .9s cubic-bezier(.6,0,.2,1)}
+.opening.out{opacity:0;transform:scale(1.08);pointer-events:none}
+.vitruvian{fill:none;stroke:var(--text);stroke-width:1}
+.opening .vitruvian{position:absolute;width:min(78vmin,560px);height:auto}
+.v-circle{stroke-dasharray:1106;stroke-dashoffset:1106;animation:vDraw 1.6s .15s cubic-bezier(.65,0,.35,1) forwards}
+.v-square{stroke-dasharray:1184;stroke-dashoffset:1184;animation:vDraw 1.6s .45s cubic-bezier(.65,0,.35,1) forwards}
+.v-ticks line{stroke:var(--accent);stroke-width:1.2;opacity:0;animation:fade .01s forwards}
+.v-ticks{transform-origin:200px 200px;animation:vTicks 1.2s .9s cubic-bezier(.2,.8,.2,1) both,spin 90s 2s linear infinite}
+.v-axis{stroke:var(--line-2);stroke-dasharray:4 6;transform-origin:200px 200px;animation:vAxis 1.2s .7s cubic-bezier(.2,.8,.2,1) both}.v-axis.h{animation-delay:.85s}
+.v-core{fill:var(--accent);stroke:none;animation:popIn .6s 1.2s both}
+.v-ticks line{animation-delay:1s}
+.op-word{position:relative;font-family:var(--serif);font-style:italic;font-weight:500;font-size:clamp(46px,9vmin,96px);color:var(--accent);letter-spacing:-1px;animation:wordIn .52s cubic-bezier(.2,.8,.2,1) both}
+.op-word span{display:block;padding:0 .2em;background:var(--bg)}
+.op-foot{position:absolute;left:16px;right:16px;bottom:max(34px,env(safe-area-inset-bottom));margin:0;text-align:center;font-family:var(--serif);font-size:15px;letter-spacing:.3em;text-transform:uppercase;color:var(--text-2);animation:rise .8s .6s both}
+.op-skip{position:absolute;top:max(18px,env(safe-area-inset-top));right:20px;padding:8px 14px;font-size:14px;color:var(--text-3);border:1px solid var(--line-2);border-radius:999px;animation:fade .6s 1s both}.op-skip:hover{color:var(--text);border-color:var(--text)}
+@keyframes vDraw{to{stroke-dashoffset:0}}
+@keyframes vTicks{from{opacity:0;transform:rotate(-40deg) scale(.9)}to{opacity:1;transform:none}}
+@keyframes vAxis{from{transform:scale(0)}to{transform:none}}
+@keyframes wordIn{0%{opacity:0;filter:blur(10px);transform:translateY(14px) scale(.96)}100%{opacity:1;filter:none;transform:none}}
+/* Title page: the figure turns slowly behind it; corner ornaments draw in */
+.ln-hero{position:relative;overflow:hidden}
+.ln-hero .vitruvian.bg{position:absolute;left:50%;top:50%;width:min(96vmin,900px);height:auto;transform:translate(-50%,-50%);opacity:.22;pointer-events:none;animation:fade 1.6s both}
+.ln-hero .vitruvian.bg .v-circle,.ln-hero .vitruvian.bg .v-square{animation-duration:2.4s}
+.ln-title-page{background:var(--bg);z-index:1}
+.corner{position:absolute;width:34px;height:34px;border-color:var(--accent);border-style:solid;border-width:0;animation:cornerIn 1s .3s cubic-bezier(.2,.8,.2,1) both}
+.corner.tl{left:-8px;top:-8px;border-left-width:2px;border-top-width:2px}.corner.tr{right:-8px;top:-8px;border-right-width:2px;border-top-width:2px}
+.corner.bl{left:-8px;bottom:-8px;border-left-width:2px;border-bottom-width:2px}.corner.br{right:-8px;bottom:-8px;border-right-width:2px;border-bottom-width:2px}
+@keyframes cornerIn{from{opacity:0;transform:scale(1.6)}to{opacity:1;transform:none}}
+/* The tutorial button is always on screen */
+@media(max-width:899px){.help-btn span{display:none}}
+@media(max-width:899px){.op-foot{font-size:12px;letter-spacing:.18em}}
